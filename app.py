@@ -13,8 +13,8 @@ from io import BytesIO
 from datetime import datetime, date
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from pipeline.wide_irt    import procesar_wide
-from pipeline.runner_irt  import run_script, run_paquetes_centros
+from pipeline.wide_irt  import procesar_wide
+from pipeline.runner    import run_script, run_paquetes_centros
 
 NAVY='#1F3864'; MID='#2E75B6'; ACCENT='#00B0F0'
 ORANGE='#C8590A'; RED='#C00000'; GREEN='#538135'
