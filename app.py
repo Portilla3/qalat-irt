@@ -329,7 +329,10 @@ if 'result' in st.session_state:
             elif o.get('ok'):
                 st.download_button(f'⬇️ {fmt}',data=o['buf'].getvalue(),
                     file_name=o['fname'],mime=o['mime'],use_container_width=True,key=dlkey)
-            else: st.warning(f"⚠️ {o.get('error','Error')[:100]}")
+            else:
+                err=o.get('error','Error desconocido')
+                st.error(f"⚠️ Error en {key}")
+                st.code(err, language='python')
 
     st.markdown('---')
     d4,d5=st.columns(2)
@@ -341,7 +344,11 @@ if 'result' in st.session_state:
             elif o.get('ok'):
                 st.download_button(f'⬇️ {fmt}',data=o['buf'].getvalue(),
                     file_name=o['fname'],mime=o['mime'],use_container_width=True,key=dlkey)
-            else: st.warning(f"⚠️ {o.get('error','Error')[:100]}")
+            else:
+                err=o.get('error','Error desconocido')
+                st.warning(f"⚠️ {err[:120]}")
+                with st.expander("Ver error completo"):
+                    st.code(err, language='python')
 
     # ── Distribución por centros ───────────────────────────────────────────────
     if 'wide_path' in st.session_state and not filtro_centro_val:
