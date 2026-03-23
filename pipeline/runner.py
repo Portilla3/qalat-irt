@@ -25,22 +25,30 @@ SCRIPT_FILES = {
 
 def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
     """
-    Carga el script IRT, inyecta rutas directamente en el código fuente
-    y lo ejecuta con exec() en el proceso actual (sin subprocess).
-    Mismo enfoque que el runner TOP → compatibilidad total con Python 3.14+.
+    Carga el script IRT, inyecta rutas en el código fuente y ejecuta
+    con exec() en el mismo proceso. Maneja dos estilos de declaración:
+      - Excel: INPUT_FILE = auto_archivo_wide() / OUTPUT_FILE = '/home/claude/...'
+      - Word:  INPUT_FILE = None  # runner inyecta la ruta real
     """
     src = open(str(PIPELINE_DIR / SCRIPT_FILES[script_key]), encoding='utf-8').read()
 
-    # ── 1. Reemplazar INPUT_FILE = auto_archivo_wide() ────────────────────────
     wide_esc = wide_path.replace('\\', '/')
+    out_esc  = out_path.replace('\\', '/')
+
+    # ── 1. INPUT_FILE — estilo Excel (auto_archivo_wide) ─────────────────────
     src = re.sub(
         r'INPUT_FILE\s*=\s*auto_archivo_wide\(\)',
         f'INPUT_FILE = r"""{wide_esc}"""',
         src
     )
+    # ── 2. INPUT_FILE — estilo Word (None + comentario runner) ───────────────
+    src = re.sub(
+        r'INPUT_FILE\s*=\s*None\s*#.*runner.*',
+        f'INPUT_FILE = r"""{wide_esc}"""',
+        src
+    )
 
-    # ── 2. Reemplazar OUTPUT_FILE = '/home/claude/...' (string literal) ───────
-    out_esc = out_path.replace('\\', '/')
+    # ── 3. OUTPUT_FILE — estilo Excel (path literal /home/claude/...) ────────
     src = re.sub(
         r"OUTPUT_FILE\s*=\s*'/home/claude/[^']*\.(?:xlsx|docx)'",
         f'OUTPUT_FILE = r"""{out_esc}"""',
@@ -51,8 +59,14 @@ def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
         f'OUTPUT_FILE = r"""{out_esc}"""',
         src
     )
-
-    # ── 3. Suprimir overrides con f-string (dentro de if FILTRO_CENTRO) ───────
+    # ── 4. OUTPUT_FILE — estilo Word (None + comentario runner) ──────────────
+    src = re.sub(
+        r'OUTPUT_FILE\s*=\s*None\s*#.*runner.*',
+        f'OUTPUT_FILE = r"""{out_esc}"""',
+        src
+    )
+    # ── 5. OUTPUT_FILE — overrides con f-string dentro de if FILTRO_CENTRO ───
+    #     Los neutralizamos para que no sobreescriban la ruta correcta
     src = re.sub(
         r"OUTPUT_FILE\s*=\s*f'/home/claude/[^']*'",
         f'OUTPUT_FILE = r"""{out_esc}"""',
@@ -64,24 +78,31 @@ def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
         src
     )
 
-    # ── 4. Inyectar FILTRO_CENTRO ─────────────────────────────────────────────
+    # ── 6. FILTRO_CENTRO ──────────────────────────────────────────────────────
     if filtro_centro:
         centro_esc = str(filtro_centro).replace('"', '\\"')
+        # Estilo Word: FILTRO_CENTRO = None   # runner inyecta
+        src = re.sub(
+            r'FILTRO_CENTRO\s*=\s*None\s*#.*runner.*',
+            f'FILTRO_CENTRO = "{centro_esc}"',
+            src
+        )
+        # Estilo Excel: FILTRO_CENTRO = None (línea sola)
         src = re.sub(
             r'^FILTRO_CENTRO\s*=\s*None\s*$',
             f'FILTRO_CENTRO = "{centro_esc}"',
             src, flags=re.MULTILINE
         )
-    # Si filtro_centro es None, dejamos FILTRO_CENTRO = None tal cual
+    # Si filtro_centro es None, no tocamos nada (queda None)
 
-    # ── 5. Redirigir auto_archivo_wide() a INPUT_FILE ─────────────────────────
+    # ── 7. Redirigir auto_archivo_wide() para que no busque en disco ──────────
     src = re.sub(
-        r'(def auto_archivo_wide\(\):)(.+?)(?=\ndef |\nprint|\n[A-Z]|\Z)',
-        r'\1\n    return INPUT_FILE\n',
+        r'def auto_archivo_wide\(\):.*?(?=\ndef |\nprint\(|\n[A-Z_]|\Z)',
+        'def auto_archivo_wide():\n    return INPUT_FILE\n',
         src, flags=re.DOTALL
     )
 
-    # ── 6. Ejecutar con exec() ─────────────────────────────────────────────────
+    # ── 8. Ejecutar con exec() ────────────────────────────────────────────────
     mod = types.ModuleType(f'_qmod_irt_{script_key}')
     mod.__file__ = str(PIPELINE_DIR / SCRIPT_FILES[script_key])
     mod.__dict__['__builtins__'] = builtins
