@@ -1,8 +1,8 @@
 """
-pipeline/runner_irt.py — Runner para la app QALAT IRT
-Usa subprocess + variables de entorno para todos los scripts.
+pipeline/runner.py — Runner para la app QALAT IRT
+Usa exec() en el mismo proceso (igual que el TOP) para mayor compatibilidad.
 """
-import sys, os, re, tempfile, shutil, types
+import sys, os, re, tempfile, shutil, types, traceback as _tb, builtins
 from io import BytesIO
 from pathlib import Path
 
@@ -23,70 +23,79 @@ SCRIPT_FILES = {
 }
 
 
-def _patch_and_run(script_key, wide_path, out_path, filtro_centro=None):
+def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
     """
-    Parchea el script con env vars y lo ejecuta via subprocess.
-    Todos los scripts IRT usan el mismo patrón.
+    Carga el script IRT, inyecta rutas directamente en el código fuente
+    y lo ejecuta con exec() en el proceso actual (sin subprocess).
+    Mismo enfoque que el runner TOP → compatibilidad total con Python 3.14+.
     """
-    import subprocess
-
     src = open(str(PIPELINE_DIR / SCRIPT_FILES[script_key]), encoding='utf-8').read()
 
-    # Parchar INPUT_FILE
+    # ── 1. Reemplazar INPUT_FILE = auto_archivo_wide() ────────────────────────
+    wide_esc = wide_path.replace('\\', '/')
     src = re.sub(
         r'INPUT_FILE\s*=\s*auto_archivo_wide\(\)',
-        'INPUT_FILE = __import__("os").environ["QALAT_WIDE"]',
+        f'INPUT_FILE = r"""{wide_esc}"""',
         src
     )
-    src = re.sub(
-        r'INPUT_FILE\s*=\s*None\s*#.*runner.*',
-        'INPUT_FILE = __import__("os").environ["QALAT_WIDE"]',
-        src
-    )
-    # Parchar OUTPUT_FILE
+
+    # ── 2. Reemplazar OUTPUT_FILE = '/home/claude/...' (string literal) ───────
+    out_esc = out_path.replace('\\', '/')
     src = re.sub(
         r"OUTPUT_FILE\s*=\s*'/home/claude/[^']*\.(?:xlsx|docx)'",
-        'OUTPUT_FILE = __import__("os").environ["QALAT_OUT"]',
+        f'OUTPUT_FILE = r"""{out_esc}"""',
         src
     )
     src = re.sub(
-        r'OUTPUT_FILE\s*=\s*None\s*#.*runner.*',
-        'OUTPUT_FILE = __import__("os").environ["QALAT_OUT"]',
+        r'OUTPUT_FILE\s*=\s*"/home/claude/[^"]*\.(?:xlsx|docx)"',
+        f'OUTPUT_FILE = r"""{out_esc}"""',
         src
-    )
-    # Parchar FILTRO_CENTRO
-    src = re.sub(
-        r'FILTRO_CENTRO\s*=\s*None\s*#.*runner.*',
-        'FILTRO_CENTRO = __import__("os").environ.get("QALAT_CENTRO") or None',
-        src
-    )
-    src = re.sub(
-        r'^FILTRO_CENTRO\s*=\s*None\s*$',
-        'FILTRO_CENTRO = __import__("os").environ.get("QALAT_CENTRO") or None',
-        src, flags=re.MULTILINE
     )
 
-    fd, tmp_py = tempfile.mkstemp(suffix='.py', prefix='qalat_irt_')
-    os.close(fd)
-    with open(tmp_py, 'w', encoding='utf-8') as f:
-        f.write(src)
+    # ── 3. Suprimir overrides con f-string (dentro de if FILTRO_CENTRO) ───────
+    src = re.sub(
+        r"OUTPUT_FILE\s*=\s*f'/home/claude/[^']*'",
+        f'OUTPUT_FILE = r"""{out_esc}"""',
+        src
+    )
+    src = re.sub(
+        r'OUTPUT_FILE\s*=\s*f"/home/claude/[^"]*"',
+        f'OUTPUT_FILE = r"""{out_esc}"""',
+        src
+    )
 
-    env = os.environ.copy()
-    env['QALAT_WIDE']   = wide_path
-    env['QALAT_OUT']    = out_path
-    env['QALAT_CENTRO'] = filtro_centro or ''
+    # ── 4. Inyectar FILTRO_CENTRO ─────────────────────────────────────────────
+    if filtro_centro:
+        centro_esc = str(filtro_centro).replace('"', '\\"')
+        src = re.sub(
+            r'^FILTRO_CENTRO\s*=\s*None\s*$',
+            f'FILTRO_CENTRO = "{centro_esc}"',
+            src, flags=re.MULTILINE
+        )
+    # Si filtro_centro es None, dejamos FILTRO_CENTRO = None tal cual
+
+    # ── 5. Redirigir auto_archivo_wide() a INPUT_FILE ─────────────────────────
+    src = re.sub(
+        r'(def auto_archivo_wide\(\):)(.+?)(?=\ndef |\nprint|\n[A-Z]|\Z)',
+        r'\1\n    return INPUT_FILE\n',
+        src, flags=re.DOTALL
+    )
+
+    # ── 6. Ejecutar con exec() ─────────────────────────────────────────────────
+    mod = types.ModuleType(f'_qmod_irt_{script_key}')
+    mod.__file__ = str(PIPELINE_DIR / SCRIPT_FILES[script_key])
+    mod.__dict__['__builtins__'] = builtins
 
     try:
-        r = subprocess.run(
-            [sys.executable, tmp_py],
-            capture_output=True, text=True,
-            timeout=180, env=env
+        exec(compile(src, f'<{script_key}>', 'exec'), mod.__dict__)
+    except SystemExit as e:
+        # SystemExit(0) = fin normal (ej: sin datos IRT2)
+        if e.code and e.code != 0:
+            raise RuntimeError(f'El script terminó con código de error: {e.code}')
+    except Exception:
+        raise RuntimeError(
+            f'Error ejecutando {script_key}:\n{_tb.format_exc()}'
         )
-        if r.returncode != 0:
-            raise RuntimeError(r.stderr[-2000:] or r.stdout[-2000:])
-    finally:
-        try: os.unlink(tmp_py)
-        except: pass
 
 
 def run_script(script_key, wide_path, filtro_centro=None):
@@ -100,7 +109,7 @@ def run_script(script_key, wide_path, filtro_centro=None):
     os.close(fd)
 
     try:
-        _patch_and_run(script_key, wide_path, out_path, filtro_centro)
+        _exec_script(script_key, wide_path, out_path, filtro_centro)
 
         if not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
             raise FileNotFoundError('El script no generó salida')
