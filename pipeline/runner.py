@@ -103,11 +103,23 @@ def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
     )
 
     # ── 8. Parchear if __name__ == '__main__': → ejecutar siempre ─────────────
-    #     Con exec() __name__ nunca es '__main__', así que ese bloque no corre.
     src = re.sub(
         r"if\s+__name__\s*==\s*['\"]__main__['\"]\s*:",
         'if True:  # runner: ejecutar siempre',
         src
+    )
+
+    # ── 9. Parchear accesos directos a 'Tiene_IRT3' que crashean si no existe ─
+    # caract_excel: línea de print con .sum()
+    src = src.replace(
+        '(df["Tiene_IRT3"]=="Sí").sum()',
+        '(df["Tiene_IRT3"].eq("Sí").sum() if "Tiene_IRT3" in df.columns else 0)'
+    )
+    # seg_excel: mask3 = df['Tiene_IRT3'] == 'Sí'
+    src = re.sub(
+        r"^(\s*)mask3\s*=\s*df\['Tiene_IRT3'\]\s*==\s*'Sí'\s*$",
+        r"\1mask3 = df['Tiene_IRT3'].eq('Sí') if 'Tiene_IRT3' in df.columns else __import__('pandas').Series([False]*len(df), index=df.index)",
+        src, flags=re.MULTILINE
     )
 
     # ── 8. Ejecutar con exec() ────────────────────────────────────────────────
