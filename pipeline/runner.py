@@ -16,10 +16,10 @@ OUTPUTS = {
 }
 
 SCRIPT_FILES = {
-    'caract_excel': 'caract_excel_irt.py',
-    'seg_excel':    'seg_excel_irt.py',
-    'word_caract':  'word_caract_irt.py',
-    'word_seg':     'word_seg_irt.py',
+    'caract_excel': 'caract_excel.py',
+    'seg_excel':    'seg_excel.py',
+    'word_caract':  'word_caract.py',
+    'word_seg':     'word_seg.py',
 }
 
 
