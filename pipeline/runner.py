@@ -102,6 +102,14 @@ def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
         src, flags=re.DOTALL
     )
 
+    # ── 8. Parchear if __name__ == '__main__': → ejecutar siempre ─────────────
+    #     Con exec() __name__ nunca es '__main__', así que ese bloque no corre.
+    src = re.sub(
+        r"if\s+__name__\s*==\s*['\"]__main__['\"]\s*:",
+        'if True:  # runner: ejecutar siempre',
+        src
+    )
+
     # ── 8. Ejecutar con exec() ────────────────────────────────────────────────
     mod = types.ModuleType(f'_qmod_irt_{script_key}')
     mod.__file__ = str(PIPELINE_DIR / SCRIPT_FILES[script_key])
