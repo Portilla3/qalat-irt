@@ -54,12 +54,12 @@ def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
 
     # ── 3. OUTPUT_FILE — estilo Excel (path literal /home/claude/...) ────────
     src = re.sub(
-        r"OUTPUT_FILE\s*=\s*'/home/claude/[^']*\.(?:xlsx|docx)'",
+        r"OUTPUT_FILE\s*=\s*'/home/claude/[^']*\.(?:xlsx|docx|pptx)'",
         f'OUTPUT_FILE = r"""{out_esc}"""',
         src
     )
     src = re.sub(
-        r'OUTPUT_FILE\s*=\s*"/home/claude/[^"]*\.(?:xlsx|docx)"',
+        r'OUTPUT_FILE\s*=\s*"/home/claude/[^"]*.(?:xlsx|docx|pptx)"',
         f'OUTPUT_FILE = r"""{out_esc}"""',
         src
     )
