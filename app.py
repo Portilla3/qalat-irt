@@ -402,4 +402,34 @@ if 'result' in st.session_state:
         st.caption(f'Se generarán **{n_centros} carpetas** — una por centro')
 
         if st.button('📦 Generar paquetes por centro', use_container_width=True, key='btn_dist'):
-            wide_path_dist = st.session_state['wid
+            wide_path_dist = st.session_state['wide_path']
+            status_box = st.empty()
+            prog_dist  = st.progress(0, text='Iniciando...')
+
+            def _cb(i, total, centro):
+                pct = i/total if total else 1
+                txt = f'Centro {i+1}/{total}: {centro}' if centro!='listo' else '✅ ZIP generado'
+                prog_dist.progress(pct, text=txt); status_box.info(txt)
+
+            try:
+                with st.spinner('Generando paquetes...'):
+                    zip_buf = run_paquetes_centros(wide_path_dist, keys_sel=keys_dist, progress_cb=_cb,
+                                                   raw_bytes=st.session_state.get('raw_bytes'))
+                today_str2 = datetime.now().strftime('%Y-%m-%d')
+                prog_dist.progress(1.0, text='✅ Listo')
+                status_box.success(f'✅ ZIP con {n_centros} carpetas generado')
+                st.download_button(
+                    label=f'⬇️ Descargar ZIP ({n_centros} centros)',
+                    data=zip_buf.getvalue(),
+                    file_name=f'QALAT_IRT_Paquetes_{today_str2}.zip',
+                    mime='application/zip',
+                    use_container_width=True, key='dl_dist')
+            except Exception as e:
+                st.error(f'❌ Error: {e}')
+
+if not uploaded and 'result' not in st.session_state:
+    st.markdown("""<div style="text-align:center;padding:3rem;color:#888;">
+        <div style="font-size:3rem;">📤</div>
+        <div style="font-size:1.1rem;margin-top:1rem;">Sube tu Excel IRT para comenzar</div>
+        <div style="font-size:.85rem;margin-top:.5rem;color:#aaa;">Base bruta exportada de Jotform · instrumento IRT</div>
+    </div>""", unsafe_allow_html=True)
