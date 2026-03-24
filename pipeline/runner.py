@@ -126,6 +126,27 @@ def _exec_script(script_key, wide_path, out_path, filtro_centro=None):
         src, flags=re.MULTILINE
     )
 
+    # ── 10. Redirigir rutas /home/claude/*.json → /tmp/ (para pptx scripts) ──
+    src = re.sub(
+        r"'/home/claude/(_irt[^']*\.json)'",
+        r"'/tmp/\1'",
+        src
+    )
+    src = re.sub(
+        r'"/home/claude/(_irt[^"]*\.json)"',
+        r'"/tmp/\1"',
+        src
+    )
+    # También en el código JS embebido dentro del script Python
+    src = src.replace(
+        "fs.readFileSync('/home/claude/_irt_car_data.json'",
+        "fs.readFileSync('/tmp/_irt_car_data.json'"
+    )
+    src = src.replace(
+        "fs.readFileSync('/home/claude/_irt_data.json'",
+        "fs.readFileSync('/tmp/_irt_data.json'"
+    )
+
     # ── 8. Ejecutar con exec() ────────────────────────────────────────────────
     mod = types.ModuleType(f'_qmod_irt_{script_key}')
     mod.__file__ = str(PIPELINE_DIR / SCRIPT_FILES[script_key])
