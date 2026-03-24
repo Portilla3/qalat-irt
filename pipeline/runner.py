@@ -209,7 +209,8 @@ def _detectar_centros(wide_path):
     import pandas as pd
     try:
         df = pd.read_excel(wide_path, sheet_name='Por Centro', header=2)
-        col = df.columns[0]
+        # Columna A es separador vacío, centros están en columna B (índice 1)
+        col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
         return [str(v).strip() for v in df[col].dropna()
                 if str(v).strip().upper() != 'TOTAL' and str(v).strip()]
     except:
