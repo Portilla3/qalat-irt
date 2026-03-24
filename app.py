@@ -26,7 +26,7 @@ html,body,[class*="css"]{{font-family:'Calibri',sans-serif;}}
 .main{{background:#F8FAFD;}}
 .qalat-hdr{{background:{NAVY};color:white;padding:1.2rem 2rem;border-radius:8px;margin-bottom:1.5rem;border-left:8px solid {ACCENT};}}
 .qalat-hdr h1{{color:white;font-size:1.6rem;margin:0;}}
-.qalat-hdr h1 .instrumento{{font-size:2.2rem;font-weight:900;color:#7FD9FF;margin-left:.2rem;}}
+.qalat-hdr h1 .instrumento{{font-size:2.2rem;font-weight:900;color:#47C9F5;margin-left:.2rem;}}
 .qalat-hdr p{{color:#BDD7EE;font-size:.9rem;margin:.3rem 0 0 0;}}
 .kpi{{background:white;border-radius:8px;padding:1rem 1.2rem;border-left:4px solid {MID};
       box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:.5rem;}}
