@@ -308,5 +308,146 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
             wq.cell(ri,1).value=d['Código']; wq.cell(ri,2).value=d['Fecha']
     else:
         wq.cell(1,1).value='✅ Sin fechas duplicadas'
+
+    # ── Hoja 5: Por Centro ────────────────────────────────────────────────────
+    from openpyxl.utils import get_column_letter
+    from openpyxl.styles import Border, Side
+    C_MID='2E75B6'; C_BDR='B8CCE4'; C_IRT2='00B0F0'
+    wp=wb.create_sheet('Por Centro'); wp.sheet_properties.tabColor=C_MID
+    wp.sheet_view.showGridLines=False
+    wp.column_dimensions['A'].width=2
+    wp.column_dimensions['B'].width=42
+    for ltr,w in zip('CDEFGH',[16,16,14,14,14,16]):
+        wp.column_dimensions[ltr].width=w
+    wp.row_dimensions[1].height=32
+    wp.merge_cells('B1:H1')
+    ct=wp['B1']; ct.value='🏥  RESUMEN POR CENTRO / SERVICIO DE TRATAMIENTO'
+    ct.font=Font(bold=True,size=13,color=C_WHITE,name='Arial')
+    ct.fill=PatternFill('solid',start_color=C_DARK)
+    ct.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+    wp.row_dimensions[2].height=6
+
+    # Detectar columna centro en wide
+    col_centro_wide = None
+    for c in wide.columns:
+        nc=_norm_str(c)
+        if any(k in nc for k in ['codigo del centro','servicio de tratamiento']) and 'trabajo' not in nc:
+            col_centro_wide=c; break
+
+    hdrs_pc=['Centro / Servicio de Tratamiento','Aplicaciones','Pacientes únicos',
+             'Con IRT2','Sin IRT2\n(pendientes)','Con IRT3','Vals. corregidos']
+    cols_pc=list('BCDEFGH')
+    wp.row_dimensions[3].height=22
+    for col,hdr in zip(cols_pc,hdrs_pc):
+        c=wp[f'{col}3']; c.value=hdr
+        c.font=Font(bold=True,size=9,color=C_WHITE,name='Arial')
+        c.fill=PatternFill('solid',start_color=C_DARK)
+        c.alignment=Alignment(horizontal='center' if col!='B' else 'left',
+                              vertical='center',wrap_text=True,indent=1 if col=='B' else 0)
+        c.border=Border(bottom=Side(style='medium',color='888888'))
+
+    if col_centro_wide:
+        resumen_pc=[]
+        for centro,grp_w in wide.groupby(col_centro_wide,dropna=False):
+            pacs_u    = len(grp_w)
+            n_irt2_c  = int((grp_w['Tiene_IRT2']=='Sí').sum()) if 'Tiene_IRT2' in grp_w.columns else 0
+            n_sin_c   = pacs_u - n_irt2_c
+            n_irt3_c  = int((grp_w.get('Tiene_IRT3',pd.Series())=='Sí').sum()) if 'Tiene_IRT3' in grp_w.columns else 0
+            n_al_c    = sum(1 for a in alertas if str(a.get('Centro',''))[:60]==str(centro)[:60])
+            resumen_pc.append({'Centro':str(centro)[:60] if pd.notna(centro) else '(sin código)',
+                               'Aplicaciones':pacs_u,'Pacientes únicos':pacs_u,
+                               'Con IRT2':n_irt2_c,'Sin IRT2 (pendientes)':n_sin_c,
+                               'Con IRT3':n_irt3_c,'Vals. corregidos':n_al_c})
+        df_pc=pd.DataFrame(resumen_pc).sort_values('Aplicaciones',ascending=False)
+        for ri,row_p in enumerate(df_pc.itertuples(index=False),4):
+            wp.row_dimensions[ri].height=16
+            bg='EEF4FB' if ri%2==0 else C_WHITE
+            vals=[row_p.Centro,row_p.Aplicaciones,row_p._2,row_p._3,row_p._4,row_p._5,row_p._6]
+            for col,v in zip(cols_pc,vals):
+                c=wp[f'{col}{ri}']; c.value=v
+                es_err=col=='H' and isinstance(v,(int,float)) and int(v)>0
+                c.font=Font(size=8,name='Arial',bold=es_err,color='C00000' if es_err else '000000')
+                c.fill=PatternFill('solid',start_color=bg)
+                c.alignment=Alignment(horizontal='left' if col=='B' else 'center',
+                                      vertical='center',indent=1 if col=='B' else 0)
+                c.border=Border(bottom=Side(style='thin',color=C_BDR))
+        R_tot=4+len(df_pc)
+        wp.row_dimensions[R_tot].height=18
+        tots=['TOTAL',df_pc['Aplicaciones'].sum(),df_pc['Pacientes únicos'].sum(),
+              df_pc['Con IRT2'].sum(),df_pc['Sin IRT2 (pendientes)'].sum(),
+              df_pc['Con IRT3'].sum(),df_pc['Vals. corregidos'].sum()]
+        for col,v in zip(cols_pc,tots):
+            c=wp[f'{col}{R_tot}']; c.value=v
+            c.font=Font(bold=True,size=9,color=C_WHITE,name='Arial')
+            c.fill=PatternFill('solid',start_color=C_DARK)
+            c.alignment=Alignment(horizontal='left' if col=='B' else 'center',
+                                  vertical='center',indent=1 if col=='B' else 0)
+    else:
+        wp.merge_cells('B3:H3')
+        c=wp['B3']; c.value='  No se detectó columna de centro en esta base de datos.'
+        c.font=Font(italic=True,size=9,color='595959',name='Arial')
+        c.fill=PatternFill('solid',start_color='F2F2F2')
+        c.alignment=Alignment(horizontal='left',vertical='center',indent=2)
+
+    # ── Hoja 6: Pendientes IRT2 ───────────────────────────────────────────────
+    if 'Alerta_IRT2' in wide.columns:
+        _pend=wide[wide['Alerta_IRT2'].isin(['🟠 60-89 dias','🔴 90+ dias'])].copy()
+        if len(_pend)>0:
+            _cols_p=[]
+            if col_centro_wide: _cols_p.append(col_centro_wide)
+            _cols_p.append(COL_CODIGO)
+            if col_f1: _cols_p.append(col_f1)
+            _cols_p+=['Dias_desde_IRT1','Alerta_IRT2'] if 'Dias_desde_IRT1' in wide.columns else ['Alerta_IRT2']
+            _tab=_pend[[c for c in _cols_p if c in _pend.columns]].copy()
+            _ren={COL_CODIGO:'Código Paciente','Dias_desde_IRT1':'Días desde IRT1','Alerta_IRT2':'Alerta'}
+            if col_centro_wide: _ren[col_centro_wide]='Centro / Servicio'
+            if col_f1: _ren[col_f1]='Fecha IRT1'
+            _tab=_tab.rename(columns={k:v for k,v in _ren.items() if k in _tab.columns})
+            _tab['_ord']=_tab['Alerta'].apply(lambda x:0 if '90' in str(x) else 1)
+            _tab=_tab.sort_values(['_ord','Días desde IRT1'] if 'Días desde IRT1' in _tab.columns else ['_ord'],
+                                   ascending=True).drop(columns='_ord').reset_index(drop=True)
+
+            wp2=wb.create_sheet('Pendientes IRT2')
+            wp2.sheet_properties.tabColor='C00000'; wp2.sheet_view.showGridLines=False
+            nc=len(_tab.columns)
+            wp2.merge_cells(start_row=1,start_column=1,end_row=1,end_column=nc)
+            import datetime as _dt
+            ct=wp2.cell(1,1)
+            ct.value=f'PENDIENTES IRT2  ·  {len(_tab)} pacientes requieren evaluación  ·  {_dt.date.today().strftime("%d/%m/%Y")}'
+            ct.font=Font(bold=True,size=12,color=C_WHITE,name='Arial')
+            ct.fill=PatternFill('solid',start_color='C00000')
+            ct.alignment=Alignment(horizontal='center',vertical='center')
+            wp2.row_dimensions[1].height=28
+            wp2.merge_cells(start_row=2,start_column=1,end_row=2,end_column=nc)
+            cs=wp2.cell(2,1)
+            cs.value=f'🔴 {n_rojo} con 90+ días (URGENTE)   |   🟠 {n_naranja} con 60–89 días (PRÓXIMOS)'
+            cs.font=Font(size=10,color='444444',name='Arial')
+            cs.fill=PatternFill('solid',start_color='FFF2CC')
+            cs.alignment=Alignment(horizontal='center',vertical='center')
+            wp2.row_dimensions[2].height=20
+            for ci,col in enumerate(_tab.columns,1):
+                c=wp2.cell(3,ci); c.value=col
+                c.font=Font(bold=True,size=9,color=C_WHITE,name='Arial')
+                c.fill=PatternFill('solid',start_color='2F3640')
+                c.alignment=Alignment(horizontal='center',vertical='center')
+                c.border=Border(bottom=Side(style='medium',color='888888'))
+                ltr=get_column_letter(ci)
+                wp2.column_dimensions[ltr].width=(36 if any(k in col for k in ['Centro','Código']) else
+                                                   14 if 'Fecha' in col else 16 if 'Días' in col else
+                                                   16 if 'Alerta' in col else 20)
+            wp2.row_dimensions[3].height=22
+            for ri,row in _tab.iterrows():
+                er=ri+4; alv=row.get('Alerta','')
+                es_r='90' in str(alv)
+                bgf=PatternFill('solid',start_color='FDECEA' if es_r else 'FEF3E2')
+                for ci,col in enumerate(_tab.columns,1):
+                    c=wp2.cell(er,ci); val=row[col]
+                    c.value=None if (not isinstance(val,str) and pd.isna(val)) else (int(val) if isinstance(val,float) and val==int(val) else val)
+                    c.font=Font(size=9,name='Arial',bold=(col=='Alerta'),
+                                color=('C00000' if es_r else 'E67E22') if col=='Alerta' else '222222')
+                    c.fill=bgf
+                    c.alignment=Alignment(horizontal='center',vertical='center')
+                wp2.row_dimensions[er].height=18
+            wp2.freeze_panes='A4'
     buf=BytesIO(); wb.save(buf); buf.seek(0)
     return buf
