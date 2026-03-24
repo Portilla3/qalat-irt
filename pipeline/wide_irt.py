@@ -257,9 +257,13 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
                 N_total,N_irt2,N_irt3,N_solo1,N_al,N_du,
                 n_rojo,n_naranja,n_verde,periodo):
     from openpyxl import Workbook
-    from openpyxl.styles import Font,PatternFill,Alignment
-    C_DARK='1F3864'; C_WHITE='FFFFFF'; C_ALT='EEF4FB'
+    from openpyxl.styles import Font,PatternFill,Alignment,Border,Side
+    from openpyxl.utils import get_column_letter
+    C_DARK='1F3864'; C_MID='2E75B6'; C_WHITE='FFFFFF'
+    C_ALT='EEF4FB'; C_BDR='B8CCE4'; C_IRT2='00B0F0'
+
     wb=Workbook(); ws=wb.active; ws.title='Base Wide'
+    ws.sheet_properties.tabColor=C_DARK
     ws.sheet_view.showGridLines=False; ws.freeze_panes='B3'
     ws.merge_cells(start_row=1,start_column=1,end_row=1,end_column=len(wide.columns))
     ct=ws.cell(1,1); ct.value=f'QALAT · Base Wide IRT · {periodo} · {N_total} pacientes'
@@ -281,42 +285,187 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
             c.value=None if (not isinstance(val,str) and pd.isna(val)) else val
             c.font=Font(size=8,name='Arial'); c.fill=bg
             c.alignment=Alignment(horizontal='center',vertical='center')
-    wr=wb.create_sheet('Resumen'); wr.sheet_view.showGridLines=False
-    for ri,(k,v) in enumerate([('Instrumento','IRT'),('Período',periodo),
-            ('Pacientes únicos',N_total),('Con IRT2',N_irt2),('Con IRT3',N_irt3),
-            ('Solo IRT1',N_solo1),('% con seguimiento',f'{round(N_irt2/N_total*100,1) if N_total else 0}%'),
-            ('Valores corregidos',N_al),('🔴 Urgentes',n_rojo),
-            ('🟠 Próximos',n_naranja),('🟢 Con tiempo',n_verde)],1):
-        wr.cell(ri,1).value=k; wr.cell(ri,1).font=Font(bold=True,size=9,name='Arial')
-        wr.cell(ri,2).value=v; wr.cell(ri,2).font=Font(size=9,name='Arial')
-    wr.column_dimensions['A'].width=28; wr.column_dimensions['B'].width=20
-    wa=wb.create_sheet('Alertas'); wa.sheet_view.showGridLines=False
-    for ci,h in enumerate(['Código','Centro','Columna','Valor','Regla'],1):
-        c=wa.cell(1,ci); c.value=h
-        c.font=Font(bold=True,size=8,color=C_WHITE,name='Arial')
-        c.fill=PatternFill('solid',start_color=C_DARK)
-    for ri,a in enumerate(alertas,2):
-        for ci,k in enumerate(['Código','Centro','Columna','Valor','Regla'],1):
-            wa.cell(ri,ci).value=a.get(k,''); wa.cell(ri,ci).font=Font(size=8,name='Arial')
-    wq=wb.create_sheet('Calidad de Datos'); wq.sheet_view.showGridLines=False
+
+    # ── Hoja 2: Resumen ───────────────────────────────────────────────────────
+    wr=wb.create_sheet('Resumen')
+    wr.sheet_properties.tabColor=C_MID
+    wr.sheet_view.showGridLines=False
+    wr.column_dimensions['A'].width=2
+    wr.column_dimensions['B'].width=40
+    wr.column_dimensions['C'].width=20
+
+    def _hdr(ws,row,text,bg=C_DARK):
+        ws.merge_cells(f'B{row}:C{row}')
+        c=ws[f'B{row}']; c.value=text
+        c.font=Font(bold=True,size=10,color=C_WHITE,name='Arial')
+        c.fill=PatternFill('solid',start_color=bg)
+        c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+        ws.row_dimensions[row].height=20
+
+    def _row(ws,row,label,value,alt=False,color_val=None):
+        bg='EEF4FB' if alt else C_WHITE
+        ws.row_dimensions[row].height=16
+        for ci,val in zip(['B','C'],[label,value]):
+            c=ws[f'{ci}{row}']; c.value=val
+            c.font=Font(size=9,name='Arial',bold=(ci=='C'),
+                        color=color_val if (color_val and ci=='C') else '000000')
+            c.fill=PatternFill('solid',start_color=bg)
+            c.alignment=Alignment(horizontal='left' if ci=='B' else 'center',
+                                  vertical='center',indent=1 if ci=='B' else 0)
+            c.border=Border(bottom=Side(style='thin',color=C_BDR))
+
+    wr.merge_cells('B1:C1')
+    c=wr['B1']; c.value='RESUMEN  ·  Instrumento IRT'
+    c.font=Font(bold=True,size=13,color=C_WHITE,name='Arial')
+    c.fill=PatternFill('solid',start_color=C_DARK)
+    c.alignment=Alignment(horizontal='center',vertical='center')
+    wr.row_dimensions[1].height=32
+
+    R=3
+    _hdr(wr,R,'ESTADÍSTICAS DE LA BASE'); R+=1
+    _row(wr,R,'Período detectado',periodo,True); R+=1
+    _row(wr,R,'Total pacientes únicos (IRT1)',N_total); R+=1
+    _row(wr,R,'  → Solo IRT1 (sin seguimiento)',f'{N_solo1} ({round(N_solo1/N_total*100,1) if N_total else 0}%)',True); R+=1
+    _row(wr,R,'  → Con IRT2 (seguimiento 3m)',f'{N_irt2} ({round(N_irt2/N_total*100,1) if N_total else 0}%)'); R+=1
+    _row(wr,R,'  → Con IRT3 (seguimiento 6m)',f'{N_irt3} ({round(N_irt3/N_total*100,1) if N_total else 0}%)',True); R+=1
+    _row(wr,R,'Columnas base wide',len(wide.columns)); R+=1
+    _row(wr,R,'Valores corregidos (→ NaN)',
+         f'{N_al}  {"⚠ Ver hoja Alertas" if N_al else "✅ Sin errores"}',True,
+         color_val='C00000' if N_al else '1A6632'); R+=2
+    _hdr(wr,R,'SEMÁFORO DE SEGUIMIENTO',C_MID); R+=1
+    _row(wr,R,'🔴 Urgentes (90+ días sin IRT2)',n_rojo,True,color_val='C00000' if n_rojo else None); R+=1
+    _row(wr,R,'🟠 Próximos (60–89 días)',n_naranja,False,color_val='E67E22' if n_naranja else None); R+=1
+    _row(wr,R,'🟢 Con tiempo (<60 días)',n_verde,True,color_val='1A6632' if n_verde else None); R+=1
+    _row(wr,R,'✅ Completados (tienen IRT2)',N_irt2); R+=1
+
+    # ── Hoja 3: Alertas ───────────────────────────────────────────────────────
+    wa=wb.create_sheet('Alertas')
+    wa.sheet_properties.tabColor='C00000' if alertas else '70AD47'
+    wa.sheet_view.showGridLines=False
+    wa.column_dimensions['A'].width=2
+    wa.column_dimensions['B'].width=24
+    wa.column_dimensions['C'].width=40
+    wa.column_dimensions['D'].width=55
+    wa.column_dimensions['E'].width=20
+    wa.column_dimensions['F'].width=48
+    wa.row_dimensions[1].height=28
+    wa.merge_cells('B1:F1')
+    c=wa['B1']
+    c.value=(f'⚠  ALERTAS DE VALIDACIÓN  ·  {len(alertas)} valor(es) corregido(s) → NaN'
+             if alertas else '✅  SIN ERRORES DE VALIDACIÓN')
+    c.font=Font(bold=True,size=12,color=C_WHITE,name='Arial')
+    c.fill=PatternFill('solid',start_color='C00000' if alertas else '70AD47')
+    c.alignment=Alignment(horizontal='center',vertical='center')
+    if alertas:
+        wa.row_dimensions[2].height=14
+        wa.merge_cells('B2:F2')
+        c=wa['B2']
+        c.value='El valor original fue reemplazado por vacío (NaN). El paciente sigue en la base con el resto de sus datos.'
+        c.font=Font(italic=True,size=8,color='7F0000',name='Arial')
+        c.fill=PatternFill('solid',start_color='FFE6E6')
+        c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+        wa.row_dimensions[4].height=20
+        for ci,hdr in enumerate(['Código Paciente','Centro / Servicio',
+                                   'Variable / Columna','Valor Original','Regla Violada'],2):
+            c=wa.cell(4,ci,hdr)
+            c.font=Font(bold=True,size=9,color=C_WHITE,name='Arial')
+            c.fill=PatternFill('solid',start_color='C00000')
+            c.alignment=Alignment(horizontal='center',vertical='center')
+            c.border=Border(bottom=Side(style='medium',color='888888'))
+        for ri,alerta in enumerate(alertas,5):
+            wa.row_dimensions[ri].height=15
+            bg='FFF2F2' if ri%2==0 else 'FFFFFF'
+            vals=[alerta.get('Código',''),alerta.get('Centro',''),
+                  alerta.get('Columna',''),alerta.get('Valor',''),alerta.get('Regla','')]
+            for ci,v in enumerate(vals,2):
+                c=wa.cell(ri,ci,str(v))
+                c.font=Font(size=8,name='Arial',bold=(ci==4),
+                            color='1F3864' if ci==4 else '000000')
+                c.fill=PatternFill('solid',start_color=bg)
+                c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+                c.border=Border(bottom=Side(style='thin',color='DDDDDD'))
+
+    # ── Hoja 4: Calidad de Datos ──────────────────────────────────────────────
+    N_du_pac=len(set(d.get('Código','') for d in dupes)) if dupes else 0
+    if N_du_pac==0: sem_col='70AD47'; sem_txt='✅  Sin problemas de fechas duplicadas'
+    elif N_du_pac<=3: sem_col='FFD966'; sem_txt=f'⚠️  Atención: {N_du_pac} paciente(s) con fecha duplicada'
+    else: sem_col='C00000'; sem_txt=f'🔴  Problema: {N_du_pac} pacientes con fecha duplicada'
+
+    wq=wb.create_sheet('Calidad de Datos')
+    wq.sheet_properties.tabColor=sem_col
+    wq.sheet_view.showGridLines=False
+    wq.column_dimensions['A'].width=2; wq.column_dimensions['B'].width=30
+    wq.column_dimensions['C'].width=20; wq.column_dimensions['D'].width=16
+    wq.column_dimensions['E'].width=40
+    wq.row_dimensions[1].height=32
+    wq.merge_cells('B1:E1')
+    c=wq['B1']; c.value='🔍  CALIDAD DE DATOS  ·  Monitor de Errores de Ingreso'
+    c.font=Font(bold=True,size=13,color=C_WHITE,name='Arial')
+    c.fill=PatternFill('solid',start_color=C_DARK)
+    c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+    wq.row_dimensions[2].height=6
+    wq.row_dimensions[3].height=26
+    wq.merge_cells('B3:E3')
+    c=wq['B3']; c.value=sem_txt
+    c.font=Font(bold=True,size=12,color=C_WHITE,name='Arial')
+    c.fill=PatternFill('solid',start_color=sem_col)
+    c.alignment=Alignment(horizontal='left',vertical='center',indent=2)
+    wq.row_dimensions[5].height=20
+    wq.merge_cells('B5:E5')
+    c=wq['B5']; c.value='  INDICADORES GENERALES'
+    c.font=Font(bold=True,size=10,color=C_WHITE,name='Arial')
+    c.fill=PatternFill('solid',start_color=C_DARK)
+    c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+    Rq=6
+    for lbl,val,alt,cv in [
+        ('Pacientes únicos',N_total,True,None),
+        ('Pacientes con fecha duplicada',
+         f'{N_du_pac} ({round(N_du_pac/N_total*100,1) if N_total else 0}%)',
+         False,'C00000' if N_du_pac>0 else '1A6632'),
+        ('Valores inválidos corregidos (→ NaN)',N_al,True,
+         'C00000' if N_al else '1A6632'),
+    ]:
+        _row(wq,Rq,lbl,val,alt,cv); Rq+=1
+    Rq+=1
+    wq.row_dimensions[Rq].height=20
+    wq.merge_cells(f'B{Rq}:E{Rq}')
+    c=wq[f'B{Rq}']
+    c.value=(f'  CASOS CON FECHA DUPLICADA  ·  {N_du_pac} paciente(s)'
+             if N_du_pac>0 else '  CASOS CON FECHA DUPLICADA  ·  Ninguno ✅')
+    c.font=Font(bold=True,size=10,color=C_WHITE,name='Arial')
+    c.fill=PatternFill('solid',start_color='C00000' if N_du_pac>0 else '70AD47')
+    c.alignment=Alignment(horizontal='left',vertical='center',indent=1)
+    Rq+=1
     if dupes:
-        for ci,h in enumerate(['Código','Fecha'],1):
-            c=wq.cell(1,ci); c.value=h
-            c.font=Font(bold=True,size=8,color=C_WHITE,name='Arial')
-            c.fill=PatternFill('solid',start_color=C_DARK)
-        for ri,d in enumerate(dupes,2):
-            wq.cell(ri,1).value=d['Código']; wq.cell(ri,2).value=d['Fecha']
+        for ci,h in enumerate(['Código Paciente','Fecha Duplicada','N° aplicaciones'],2):
+            c=wq.cell(Rq,ci,h)
+            c.font=Font(bold=True,size=9,color=C_WHITE,name='Arial')
+            c.fill=PatternFill('solid',start_color='C00000')
+            c.alignment=Alignment(horizontal='center',vertical='center')
+            c.border=Border(bottom=Side(style='medium',color='888888'))
+        wq.row_dimensions[Rq].height=18; Rq+=1
+        for i,d in enumerate(dupes):
+            wq.row_dimensions[Rq].height=15
+            bg='FFF2F2' if i%2==0 else 'FFFFFF'
+            for ci,v in enumerate([d.get('Código',''),d.get('Fecha',''),'2 aplicaciones'],2):
+                c=wq.cell(Rq,ci,str(v))
+                c.font=Font(size=8,name='Arial')
+                c.fill=PatternFill('solid',start_color=bg)
+                c.alignment=Alignment(horizontal='left' if ci==2 else 'center',vertical='center',indent=1 if ci==2 else 0)
+                c.border=Border(bottom=Side(style='thin',color='DDDDDD'))
+            Rq+=1
     else:
-        wq.cell(1,1).value='✅ Sin fechas duplicadas'
+        wq.row_dimensions[Rq].height=20
+        wq.merge_cells(f'B{Rq}:E{Rq}')
+        c=wq[f'B{Rq}']; c.value='  No se encontraron casos con la misma fecha de aplicación.'
+        c.font=Font(italic=True,size=9,color='1A6632',name='Arial')
+        c.fill=PatternFill('solid',start_color='E2F0D9')
+        c.alignment=Alignment(horizontal='left',vertical='center',indent=2)
 
     # ── Hoja 5: Por Centro ────────────────────────────────────────────────────
-    from openpyxl.utils import get_column_letter
-    from openpyxl.styles import Border, Side
-    C_MID='2E75B6'; C_BDR='B8CCE4'; C_IRT2='00B0F0'
     wp=wb.create_sheet('Por Centro'); wp.sheet_properties.tabColor=C_MID
     wp.sheet_view.showGridLines=False
-    wp.column_dimensions['A'].width=2
-    wp.column_dimensions['B'].width=42
+    wp.column_dimensions['A'].width=2; wp.column_dimensions['B'].width=42
     for ltr,w in zip('CDEFGH',[16,16,14,14,14,16]):
         wp.column_dimensions[ltr].width=w
     wp.row_dimensions[1].height=32
@@ -327,8 +476,7 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
     ct.alignment=Alignment(horizontal='left',vertical='center',indent=1)
     wp.row_dimensions[2].height=6
 
-    # Detectar columna centro en wide
-    col_centro_wide = None
+    col_centro_wide=None
     for c in wide.columns:
         nc=_norm_str(c)
         if any(k in nc for k in ['codigo del centro','servicio de tratamiento']) and 'trabajo' not in nc:
@@ -349,20 +497,21 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
     if col_centro_wide:
         resumen_pc=[]
         for centro,grp_w in wide.groupby(col_centro_wide,dropna=False):
-            pacs_u    = len(grp_w)
-            n_irt2_c  = int((grp_w['Tiene_IRT2']=='Sí').sum()) if 'Tiene_IRT2' in grp_w.columns else 0
-            n_sin_c   = pacs_u - n_irt2_c
-            n_irt3_c  = int((grp_w.get('Tiene_IRT3',pd.Series())=='Sí').sum()) if 'Tiene_IRT3' in grp_w.columns else 0
-            n_al_c    = sum(1 for a in alertas if str(a.get('Centro',''))[:60]==str(centro)[:60])
+            pacs_u   =len(grp_w)
+            n_irt2_c =int((grp_w['Tiene_IRT2']=='Sí').sum()) if 'Tiene_IRT2' in grp_w.columns else 0
+            n_sin_c  =pacs_u-n_irt2_c
+            n_irt3_c =int((grp_w['Tiene_IRT3']=='Sí').sum()) if 'Tiene_IRT3' in grp_w.columns else 0
+            n_al_c   =sum(1 for a in alertas if str(a.get('Centro',''))[:60]==str(centro)[:60])
             resumen_pc.append({'Centro':str(centro)[:60] if pd.notna(centro) else '(sin código)',
                                'Aplicaciones':pacs_u,'Pacientes únicos':pacs_u,
-                               'Con IRT2':n_irt2_c,'Sin IRT2 (pendientes)':n_sin_c,
-                               'Con IRT3':n_irt3_c,'Vals. corregidos':n_al_c})
+                               'Con IRT2':n_irt2_c,'Sin IRT2':n_sin_c,
+                               'Con IRT3':n_irt3_c,'Vals':n_al_c})
         df_pc=pd.DataFrame(resumen_pc).sort_values('Aplicaciones',ascending=False)
         for ri,row_p in enumerate(df_pc.itertuples(index=False),4):
             wp.row_dimensions[ri].height=16
             bg='EEF4FB' if ri%2==0 else C_WHITE
-            vals=[row_p.Centro,row_p.Aplicaciones,row_p._2,row_p._3,row_p._4,row_p._5,row_p._6]
+            vals=[row_p.Centro,row_p.Aplicaciones,getattr(row_p,'Pacientes únicos',row_p._2),
+                  row_p._3,row_p._4,row_p._5,row_p._6]
             for col,v in zip(cols_pc,vals):
                 c=wp[f'{col}{ri}']; c.value=v
                 es_err=col=='H' and isinstance(v,(int,float)) and int(v)>0
@@ -371,11 +520,10 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
                 c.alignment=Alignment(horizontal='left' if col=='B' else 'center',
                                       vertical='center',indent=1 if col=='B' else 0)
                 c.border=Border(bottom=Side(style='thin',color=C_BDR))
-        R_tot=4+len(df_pc)
-        wp.row_dimensions[R_tot].height=18
+        R_tot=4+len(df_pc); wp.row_dimensions[R_tot].height=18
         tots=['TOTAL',df_pc['Aplicaciones'].sum(),df_pc['Pacientes únicos'].sum(),
-              df_pc['Con IRT2'].sum(),df_pc['Sin IRT2 (pendientes)'].sum(),
-              df_pc['Con IRT3'].sum(),df_pc['Vals. corregidos'].sum()]
+              df_pc['Con IRT2'].sum(),df_pc['Sin IRT2'].sum(),
+              df_pc['Con IRT3'].sum(),df_pc['Vals'].sum()]
         for col,v in zip(cols_pc,tots):
             c=wp[f'{col}{R_tot}']; c.value=v
             c.font=Font(bold=True,size=9,color=C_WHITE,name='Arial')
@@ -397,15 +545,16 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
             if col_centro_wide: _cols_p.append(col_centro_wide)
             _cols_p.append(COL_CODIGO)
             if col_f1: _cols_p.append(col_f1)
-            _cols_p+=['Dias_desde_IRT1','Alerta_IRT2'] if 'Dias_desde_IRT1' in wide.columns else ['Alerta_IRT2']
+            if 'Dias_desde_IRT1' in wide.columns: _cols_p.append('Dias_desde_IRT1')
+            _cols_p.append('Alerta_IRT2')
             _tab=_pend[[c for c in _cols_p if c in _pend.columns]].copy()
             _ren={COL_CODIGO:'Código Paciente','Dias_desde_IRT1':'Días desde IRT1','Alerta_IRT2':'Alerta'}
             if col_centro_wide: _ren[col_centro_wide]='Centro / Servicio'
             if col_f1: _ren[col_f1]='Fecha IRT1'
             _tab=_tab.rename(columns={k:v for k,v in _ren.items() if k in _tab.columns})
+            sort_cols=['Alerta']+(['Días desde IRT1'] if 'Días desde IRT1' in _tab.columns else [])
             _tab['_ord']=_tab['Alerta'].apply(lambda x:0 if '90' in str(x) else 1)
-            _tab=_tab.sort_values(['_ord','Días desde IRT1'] if 'Días desde IRT1' in _tab.columns else ['_ord'],
-                                   ascending=True).drop(columns='_ord').reset_index(drop=True)
+            _tab=_tab.sort_values(['_ord']+sort_cols[1:],ascending=True).drop(columns='_ord').reset_index(drop=True)
 
             wp2=wb.create_sheet('Pendientes IRT2')
             wp2.sheet_properties.tabColor='C00000'; wp2.sheet_view.showGridLines=False
@@ -437,8 +586,7 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
                                                    16 if 'Alerta' in col else 20)
             wp2.row_dimensions[3].height=22
             for ri,row in _tab.iterrows():
-                er=ri+4; alv=row.get('Alerta','')
-                es_r='90' in str(alv)
+                er=ri+4; alv=row.get('Alerta',''); es_r='90' in str(alv)
                 bgf=PatternFill('solid',start_color='FDECEA' if es_r else 'FEF3E2')
                 for ci,col in enumerate(_tab.columns,1):
                     c=wp2.cell(er,ci); val=row[col]
@@ -449,5 +597,8 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
                     c.alignment=Alignment(horizontal='center',vertical='center')
                 wp2.row_dimensions[er].height=18
             wp2.freeze_panes='A4'
+
+    buf=BytesIO(); wb.save(buf); buf.seek(0)
+    return buf
     buf=BytesIO(); wb.save(buf); buf.seek(0)
     return buf
