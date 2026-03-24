@@ -13,6 +13,8 @@ OUTPUTS = {
     'seg_excel':    ('IRT_Seguimiento.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
     'word_caract':  ('IRT_Informe_Caracterizacion.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
     'word_seg':     ('IRT_Informe_Seguimiento.docx','application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    'pptx_caract':  ('IRT_Presentacion_Caracterizacion.pptx','application/vnd.openxmlformats-officedocument.presentationml.presentation'),
+    'pptx_seg':     ('IRT_Presentacion_Seguimiento.pptx','application/vnd.openxmlformats-officedocument.presentationml.presentation'),
 }
 
 SCRIPT_FILES = {
@@ -20,6 +22,8 @@ SCRIPT_FILES = {
     'seg_excel':    'seg_excel.py',
     'word_caract':  'word_caract.py',
     'word_seg':     'word_seg.py',
+    'pptx_caract':  'pptx_caract.py',
+    'pptx_seg':     'pptx_seg.py',
 }
 
 
