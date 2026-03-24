@@ -510,8 +510,7 @@ def _excel_wide(wide,alertas,dupes,COL_CODIGO,COL_CENTRO,col_f1,
         for ri,row_p in enumerate(df_pc.itertuples(index=False),4):
             wp.row_dimensions[ri].height=16
             bg='EEF4FB' if ri%2==0 else C_WHITE
-            vals=[row_p.Centro,row_p.Aplicaciones,getattr(row_p,'Pacientes únicos',row_p._2),
-                  row_p._3,row_p._4,row_p._5,row_p._6]
+            vals=list(row_p)
             for col,v in zip(cols_pc,vals):
                 c=wp[f'{col}{ri}']; c.value=v
                 es_err=col=='H' and isinstance(v,(int,float)) and int(v)>0
