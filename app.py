@@ -71,6 +71,8 @@ LABELS = {
     'seg_excel':   ('📋 Tablas seguimiento',      'Excel',      'Comparativo IRT1 vs IRT2'),
     'word_caract': ('📄 Word caracterización',    'Word',       'Informe Word al ingreso'),
     'word_seg':    ('📄 Word seguimiento',        'Word',       'Comparativo ingreso vs seguimiento'),
+    'pptx_caract': ('📊 PPT caracterización',     'PowerPoint', 'Presentación al ingreso: sustancias, salud, transgresión'),
+    'pptx_seg':    ('📊 PPT seguimiento',         'PowerPoint', 'Presentación comparativa IRT1 vs IRT2'),
 }
 
 # ── Carga ─────────────────────────────────────────────────────────────────────
@@ -144,11 +146,14 @@ if uploaded:
         cb_se  = st.checkbox('Tablas seguimiento',     value=False, key='cb_se')
         cb_wc  = st.checkbox('Word caracterización',   value=False, key='cb_wc')
         cb_ws  = st.checkbox('Word seguimiento',       value=False, key='cb_ws')
+        cb_pc  = st.checkbox('PPT caracterización',    value=False, key='cb_pc')
+        cb_ps  = st.checkbox('PPT seguimiento',        value=False, key='cb_ps')
         st.markdown('</div>', unsafe_allow_html=True)
 
     SELECCION = {
         'caract_excel': cb_ce, 'seg_excel': cb_se,
         'word_caract':  cb_wc, 'word_seg':  cb_ws,
+        'pptx_caract':  cb_pc, 'pptx_seg':  cb_ps,
     }
 
     badges = ''
@@ -350,6 +355,21 @@ if 'result' in st.session_state:
                 st.warning(f"⚠️ {err[:120]}")
                 with st.expander("Ver error completo"):
                     st.code(err, language='python')
+
+    st.markdown('---')
+    d6,d7=st.columns(2)
+    for key,col,dlkey in [('pptx_caract',d6,'dl_pc'),('pptx_seg',d7,'dl_ps')]:
+        o=outputs.get(key,{}); lbl,fmt,desc=LABELS[key]
+        with col:
+            st.markdown(f'<div class="outcard"><h4>{lbl}</h4><p>{desc}</p></div>',unsafe_allow_html=True)
+            if not sel.get(key,False): st.caption('No seleccionado')
+            elif o.get('ok'):
+                st.download_button(f'⬇️ {fmt}',data=o['buf'].getvalue(),
+                    file_name=o['fname'],mime=o['mime'],use_container_width=True,key=dlkey)
+            else:
+                err=o.get('error','Error desconocido')
+                st.error(f"⚠️ Error en {key}")
+                st.code(err, language='python')
 
     # ── Distribución por centros ───────────────────────────────────────────────
     if 'wide_path' in st.session_state and not filtro_centro_val:
