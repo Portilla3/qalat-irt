@@ -381,409 +381,275 @@ data = {
     'sat':       R_sat,
 }
 
-json_path = '/home/claude/_irt_car_data.json'
-with open(json_path,'w',encoding='utf-8') as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# NODE.JS — pptxgenjs
+# PYTHON-PPTX — Construcción del PowerPoint (sin Node.js)
 # ══════════════════════════════════════════════════════════════════════════════
-JS_CODE = r"""
-const fs      = require('fs');
-const pptxgen = require('pptxgenjs');
+import io, matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN
 
-const data   = JSON.parse(fs.readFileSync('/home/claude/_irt_car_data.json', 'utf8'));
-const OUTPUT = '""" + OUTPUT_FILE + r"""';
+C_DARK  = RGBColor(0x1F,0x38,0x64)
+C_MID   = RGBColor(0x2E,0x75,0xB6)
+C_LIGHT = RGBColor(0xBD,0xD7,0xEE)
+C_ACC   = RGBColor(0x00,0xB0,0xF0)
+C_WHITE = RGBColor(0xFF,0xFF,0xFF)
+C_GRAY  = RGBColor(0x59,0x59,0x59)
+PIE_COLS = ['#2E75B6','#1F3864','#00B0F0','#9DC3E6','#70AD47',
+            '#4472C4','#D9D9D9','#C00000','#ED7D31','#FFC000']
 
-const C_DARK  = '1F3864', C_MID = '2E75B6', C_LIGHT = 'BDD7EE';
-const C_IRT1  = '1F3864';
-const C_TITLE = '0070C0', C_GRAY = '595959', C_WHITE = 'FFFFFF';
-const PIE_COLS= ['2E75B6','1F3864','00B0F0','9DC3E6','70AD47','4472C4',
-                 'D9D9D9','C00000','ED7D31','FFC000','7030A0','538135'];
+SLIDE_W = Inches(10); SLIDE_H = Inches(5.625)
 
-const pres = new pptxgen();
-pres.layout = 'LAYOUT_16x9';
+def _rgb(h): return RGBColor(int(h[:2],16),int(h[2:4],16),int(h[4:],16))
 
-function hdr(sl, txt) {
-  sl.addShape(pres.shapes.RECTANGLE, {x:0,y:0,w:10,h:0.72,
-    fill:{color:C_DARK},line:{color:C_DARK}});
-  sl.addShape(pres.shapes.RECTANGLE, {x:5.5,y:0,w:4.5,h:0.72,
-    fill:{color:C_MID,transparency:40},line:{color:C_MID,transparency:40}});
-  sl.addText(txt, {x:0.25,y:0,w:9.5,h:0.72,
-    fontSize:22,bold:true,color:C_WHITE,fontFace:'Calibri',valign:'middle'});
-}
-function divV(sl, x) {
-  sl.addShape(pres.shapes.LINE, {x,y:0.78,w:0,h:4.85,
-    line:{color:'D9D9D9',width:1}});
-}
+def add_rect(sl, x,y,w,h,fill):
+    s = sl.shapes.add_shape(1,Inches(x),Inches(y),Inches(w),Inches(h))
+    s.fill.solid(); s.fill.fore_color.rgb=fill; s.line.fill.background()
 
-const TITULO = `Caracterización al Ingreso · ${data.meta.servicio}`;
+def add_txt(sl,text,x,y,w,h,size=11,bold=False,color=None,align=PP_ALIGN.LEFT,italic=False):
+    tb = sl.shapes.add_textbox(Inches(x),Inches(y),Inches(w),Inches(h))
+    tf = tb.text_frame; tf.word_wrap=True
+    p  = tf.paragraphs[0]; p.alignment=align
+    r  = p.add_run(); r.text=str(text)
+    r.font.size=Pt(size); r.font.bold=bold; r.font.italic=italic
+    if color: r.font.color.rgb=color
 
-// ── SLIDE 1: PORTADA ──────────────────────────────────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  sl.addShape(pres.shapes.RECTANGLE, {x:0,y:0,w:4.0,h:5.625,
-    fill:{color:C_DARK},line:{color:C_DARK}});
-  sl.addShape(pres.shapes.RECTANGLE, {x:3.1,y:0,w:1.5,h:5.625,
-    fill:{color:C_MID,transparency:60},line:{color:C_MID,transparency:60}});
-  sl.addText('Caracterización', {x:0.25,y:1.6,w:3.2,h:0.7,
-    fontSize:22,bold:true,color:C_WHITE,fontFace:'Calibri'});
-  sl.addText('Ingreso a Tratamiento · IRT', {x:0.25,y:2.35,w:3.2,h:0.55,
-    fontSize:12,color:C_LIGHT,fontFace:'Calibri'});
-  sl.addText([
-    {text:'IRT 1', options:{breakLine:true}},
-    {text:'Ingreso a Tratamiento'}
-  ], {x:4.6,y:1.55,w:5.1,h:1.4,
-    fontSize:30,bold:true,color:C_GRAY,fontFace:'Calibri',align:'center',valign:'middle'});
-  sl.addText(data.meta.servicio.toUpperCase(), {x:4.6,y:3.1,w:5.1,h:0.45,
-    fontSize:17,bold:true,color:C_MID,fontFace:'Calibri',align:'center'});
-  sl.addText(data.meta.periodo, {x:4.6,y:3.62,w:5.1,h:0.35,
-    fontSize:13,bold:true,color:C_MID,fontFace:'Calibri',align:'center'});
-  sl.addText(`N = ${data.meta.N} personas al ingreso a tratamiento`,
-    {x:4.6,y:4.1,w:5.1,h:0.35,fontSize:11,color:'888888',fontFace:'Calibri',align:'center'});
-}
+def hdr(sl, txt):
+    add_rect(sl,0,0,10,0.72,C_DARK)
+    add_rect(sl,5.5,0,4.5,0.72,C_ACC)
+    add_txt(sl,txt,0.25,0.05,9.5,0.62,size=18,bold=True,color=C_WHITE)
 
-// ── SLIDE 2: ANTECEDENTES GENERALES ──────────────────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  hdr(sl, TITULO);
-  divV(sl, 4.95);
+def ftr(sl, txt):
+    add_txt(sl,txt,0.25,5.32,9.5,0.25,size=8,color=C_GRAY,align=PP_ALIGN.CENTER,italic=True)
 
-  // KPIs: N · % hombres · edad promedio
-  const kpis = [
-    {val: String(data.meta.N),          lab:'Personas\ningresaron'},
-    {val: `${data.meta.pct_h}%`,         lab:'Son\nhombres'},
-    {val: String(data.meta.edad_media),  lab:'Edad\npromedio'},
-  ];
-  kpis.forEach((k,i) => {
-    const x = 0.18 + i*1.55;
-    sl.addShape(pres.shapes.RECTANGLE, {x,y:0.82,w:1.42,h:0.88,
-      fill:{color:'EEF4FB'},line:{color:'BDD7EE',width:0.5}});
-    sl.addText(k.val, {x,y:0.86,w:1.42,h:0.48,
-      fontSize:20,bold:true,color:C_DARK,fontFace:'Calibri',align:'center',valign:'middle'});
-    sl.addText(k.lab, {x,y:1.34,w:1.42,h:0.34,
-      fontSize:9,color:C_GRAY,fontFace:'Calibri',align:'center',valign:'top'});
-  });
+def divv(sl,x):
+    ln=sl.shapes.add_shape(1,Inches(x),Inches(0.78),Inches(0.02),Inches(4.85))
+    ln.fill.solid(); ln.fill.fore_color.rgb=RGBColor(0xD9,0xD9,0xD9); ln.line.fill.background()
 
-  // Izquierda: torta sexo
-  sl.addText('Distribución por Sexo',
-    {x:0.25,y:1.85,w:4.5,h:0.35,
-     fontSize:12,bold:true,color:C_GRAY,fontFace:'Calibri'});
-  const sexoFilt = data.sexo.filter(s=>s.n>0);
-  if (sexoFilt.length > 0) {
-    sl.addChart(pres.charts.PIE, [{
-      name:'Sexo',
-      labels: sexoFilt.map(s=>s.label),
-      values: sexoFilt.map(s=>s.n),
-    }], {
-      x:0.4,y:2.22,w:4.2,h:3.15,
-      showPercent:true,showLabel:false,showLegend:true,legendPos:'b',legendFontSize:11,
-      dataLabelFontSize:13,chartColors:['2E75B6','9DC3E6'],
-      chartArea:{fill:{color:'FFFFFF'}},dataLabelColor:C_WHITE,
-    });
-  }
+def fig2img(sl,fig,x,y,w,h):
+    buf=io.BytesIO()
+    fig.savefig(buf,format='png',dpi=130,bbox_inches='tight',facecolor='white')
+    buf.seek(0); plt.close(fig)
+    sl.shapes.add_picture(buf,Inches(x),Inches(y),Inches(w),Inches(h))
 
-  // Derecha: edad
-  sl.addText('Distribución por Rango de Edad',
-    {x:5.15,y:0.85,w:4.6,h:0.35,
-     fontSize:12,bold:true,color:C_GRAY,fontFace:'Calibri'});
-  if (data.meta.edad_media > 0) {
-    sl.addText(`Promedio: ${data.meta.edad_media} años`,
-      {x:5.15,y:1.22,w:4.6,h:0.28,
-       fontSize:10,color:C_GRAY,fontFace:'Calibri',italic:true});
-  }
-  if (data.edad.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'Personas',
-      labels: data.edad.map(e=>e.label),
-      values: data.edad.map(e=>e.pct),
-    }], {
-      x:5.1,y:1.52,w:4.65,h:3.85,barDir:'col',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFormatCode:'0"%"',dataLabelFontSize:10,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:11,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-      valAxisNumFmt:'0"%"',
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
-}
+def axstyle(ax,horiz=False):
+    ax.set_facecolor('white')
+    (ax.xaxis if horiz else ax.yaxis).grid(True,color='#E2E8F0',linewidth=0.6,zorder=0)
+    ax.set_axisbelow(True)
+    for sp in ['top','right']: ax.spines[sp].set_visible(False)
+    ax.spines['left'].set_color('#D0D0D0'); ax.spines['bottom'].set_color('#D0D0D0')
 
-// ── SLIDE 3: SUSTANCIA PRINCIPAL ─────────────────────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  hdr(sl, TITULO);
-  sl.addText('CONSUMO SUSTANCIA PRINCIPAL AL INGRESO',
-    {x:1.5,y:0.82,w:7,h:0.38,
-     fontSize:14,bold:true,color:C_TITLE,fontFace:'Calibri',align:'center'});
-  if (data.sust.length > 0) {
-    sl.addChart(pres.charts.PIE, [{
-      name:'Sustancia',
-      labels: data.sust.map(s=>s.label),
-      values: data.sust.map(s=>s.pct),
-    }], {
-      x:1.3,y:1.28,w:7.4,h:4.1,
-      showPercent:true,showLabel:false,showLegend:true,legendPos:'b',legendFontSize:10,
-      dataLabelFontSize:11,chartColors:PIE_COLS.slice(0,data.sust.length),
-      chartArea:{fill:{color:'FFFFFF'}},dataLabelColor:C_WHITE,dataLabelPosition:'bestFit',
-    });
-    sl.addText(
-      `Sustancia más frecuente: ${data.meta.sust_top1} (${data.meta.sust_top1_pct}%)  ·  N = ${data.meta.N}`,
-      {x:1.0,y:5.3,w:8,h:0.25,
-       fontSize:9,color:C_GRAY,fontFace:'Calibri',align:'center',italic:true});
-  }
-}
+# ── Gráficos ──────────────────────────────────────────────────────────────────
+def g_pie(labels,values,title=''):
+    fig,ax=plt.subplots(figsize=(4.5,3.8))
+    cols=PIE_COLS[:len(values)]
+    wedges,_,at=ax.pie(values,labels=None,colors=cols,
+        autopct=lambda p:f'{p:.1f}%' if p>4 else '',startangle=140,pctdistance=0.72,
+        wedgeprops={'edgecolor':'white','linewidth':1.5})
+    for a in at: a.set_fontsize(9); a.set_color('white'); a.set_fontweight('bold')
+    ax.legend(wedges,[f'{l} (n={v})' for l,v in zip(labels,values)],
+              loc='lower center',bbox_to_anchor=(0.5,-0.18),ncol=2,fontsize=8,frameon=False)
+    ax.set_aspect('equal'); fig.patch.set_facecolor('white'); fig.tight_layout()
+    return fig
 
-// ── SLIDE 4: DÍAS CONSUMO SUSTANCIA PRINCIPAL ─────────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  hdr(sl, TITULO);
-  sl.addText('PROMEDIO DE DÍAS DE CONSUMO DE LA SUSTANCIA PRINCIPAL\nÚltimas 4 semanas · solo personas cuya sust. principal corresponde a cada categoría',
-    {x:0.5,y:0.82,w:9.0,h:0.65,
-     fontSize:12,bold:true,color:C_TITLE,fontFace:'Calibri',align:'center'});
-  if (data.dias_pp.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'Días promedio',
-      labels: data.dias_pp.map(d=>d.label),
-      values: data.dias_pp.map(d=>d.prom),
-    }], {
-      x:1.2,y:1.55,w:7.6,h:3.85,barDir:'col',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFontSize:11,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:11,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-      valAxisMaxVal:28,valAxisMinVal:0,
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
-  sl.addText(`N = ${data.meta.N}  ·  Escala: días en últimas 4 semanas (0–28)`,
-    {x:0.25,y:5.35,w:9.5,h:0.25,
-     fontSize:8.5,color:'AAAAAA',fontFace:'Calibri',align:'center',italic:true});
-}
+def g_bar_v(labels,values,color='#1F3864',ylabel='',max_val=None):
+    fig,ax=plt.subplots(figsize=(max(4.5,len(labels)*0.85),3.5))
+    bars=ax.bar(labels,values,color=color,width=0.55,zorder=3)
+    for b,v in zip(bars,values):
+        ax.text(b.get_x()+b.get_width()/2,b.get_height()+0.3,
+                str(v),ha='center',va='bottom',fontsize=9,fontweight='bold',color='#333')
+    if max_val: ax.set_ylim(0,max_val*1.15)
+    else: ax.set_ylim(0,max(values)*1.3 if values else 1)
+    if ylabel: ax.set_ylabel(ylabel,fontsize=8,color='#595959')
+    ax.set_xticklabels(labels,fontsize=9,rotation=20,ha='right')
+    axstyle(ax); fig.patch.set_facecolor('white'); fig.tight_layout()
+    return fig
 
-// ── SLIDE 5: % CONSUMIDORES + DÍAS POR SUSTANCIA ──────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  hdr(sl, TITULO);
-  divV(sl, 4.95);
+def g_bar_h(labels,values,color='#2E75B6',xlabel=''):
+    fig,ax=plt.subplots(figsize=(4.5,max(2.8,len(labels)*0.55)))
+    bars=ax.barh(labels,values,color=color,height=0.55,zorder=3)
+    for b,v in zip(bars,values):
+        ax.text(b.get_width()+0.5,b.get_y()+b.get_height()/2,
+                str(v),va='center',fontsize=9,fontweight='bold',color='#333')
+    ax.set_xlim(0,max(values)*1.35 if values else 1)
+    if xlabel: ax.set_xlabel(xlabel,fontsize=8,color='#595959')
+    axstyle(ax,horiz=True); fig.patch.set_facecolor('white'); fig.tight_layout()
+    return fig
 
-  sl.addText('% DE PERSONAS QUE CONSUME\nCada sustancia al ingreso',
-    {x:0.25,y:0.82,w:4.5,h:0.65,
-     fontSize:11,bold:true,color:C_TITLE,fontFace:'Calibri',align:'left'});
-  if (data.consumo.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'% Consumidores',
-      labels: data.consumo.map(d=>d.label),
-      values: data.consumo.map(d=>d.pct),
-    }], {
-      x:0.2,y:1.52,w:4.5,h:3.85,barDir:'col',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFormatCode:'0"%"',dataLabelFontSize:10,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:9,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-      valAxisMaxVal:100,valAxisNumFmt:'0"%"',
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
+def g_kpi_sexo(sexo_list, N):
+    fig,ax=plt.subplots(figsize=(4.2,3.5))
+    labs=[s['label'] for s in sexo_list]; vals=[s['n'] for s in sexo_list]
+    cols=['#2E75B6','#9DC3E6','#BDD7EE'][:len(labs)]
+    bars=ax.bar(labs,vals,color=cols,width=0.5,zorder=3)
+    for b,v in zip(bars,vals):
+        ax.text(b.get_x()+b.get_width()/2,b.get_height()+0.3,
+                f'{v}\n({round(v/N*100,1)}%)',ha='center',va='bottom',fontsize=10,fontweight='bold',color='#333')
+    ax.set_ylim(0,max(vals)*1.4 if vals else 1)
+    axstyle(ax); fig.patch.set_facecolor('white'); fig.tight_layout()
+    return fig
 
-  sl.addText('PROMEDIO DE DÍAS DE CONSUMO\nPor sustancia (solo consumidores)',
-    {x:5.15,y:0.82,w:4.6,h:0.65,
-     fontSize:11,bold:true,color:C_TITLE,fontFace:'Calibri',align:'left'});
-  if (data.dias.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'Días promedio',
-      labels: data.dias.map(d=>d.label),
-      values: data.dias.map(d=>d.prom),
-    }], {
-      x:5.15,y:1.52,w:4.6,h:3.85,barDir:'col',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFontSize:10,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:9,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-      valAxisMaxVal:28,valAxisMinVal:0,
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
-  sl.addText(`N = ${data.meta.N}  ·  Una persona puede consumir más de una sustancia`,
-    {x:0.25,y:5.35,w:9.5,h:0.25,
-     fontSize:8.5,color:'AAAAAA',fontFace:'Calibri',align:'center',italic:true});
-}
+# ── Construcción slides ───────────────────────────────────────────────────────
+prs = Presentation()
+prs.slide_width=SLIDE_W; prs.slide_height=SLIDE_H
+blank=prs.slide_layouts[6]
+TITULO = f'Caracterización al Ingreso · {SERVICIO}'
+PIE_TXT = f'N = {N}  ·  {SERVICIO}  ·  {PERIODO}  ·  Instrumento IRT'
 
-// ── SLIDE 6: URGENCIAS + ACCIDENTES + SALUD ───────────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  hdr(sl, TITULO);
-  divV(sl, 4.95);
+# SLIDE 1: PORTADA
+sl=prs.slides.add_slide(blank)
+add_rect(sl,0,0,4.0,5.625,C_DARK)
+add_rect(sl,3.1,0,1.5,5.625,C_ACC)
+add_txt(sl,'Caracterización',0.25,1.6,3.2,0.7,size=22,bold=True,color=C_WHITE)
+add_txt(sl,'Ingreso a Tratamiento · IRT',0.25,2.35,3.2,0.55,size=12,color=C_LIGHT)
+add_txt(sl,SERVICIO.upper(),0.25,3.1,3.2,0.6,size=13,bold=True,color=C_WHITE)
+add_txt(sl,PERIODO,0.25,3.75,3.2,0.4,size=11,color=C_LIGHT)
+add_txt(sl,f'N = {N} personas al ingreso',0.25,4.3,3.2,0.4,size=10,color=C_LIGHT)
+add_txt(sl,'IRT 1\nIngreso a Tratamiento',4.6,1.55,5.1,1.4,size=28,bold=True,color=C_GRAY,align=PP_ALIGN.CENTER)
+add_txt(sl,SERVICIO.upper(),4.6,3.1,5.1,0.45,size=15,bold=True,color=C_MID,align=PP_ALIGN.CENTER)
+add_txt(sl,PERIODO,4.6,3.62,5.1,0.35,size=13,bold=True,color=C_MID,align=PP_ALIGN.CENTER)
+add_txt(sl,f'N = {N} personas al ingreso a tratamiento',4.6,4.1,5.1,0.35,size=10,color=C_GRAY,align=PP_ALIGN.CENTER)
 
-  const U = data.urgencias; const A = data.accidentes;
+# SLIDE 2: ANTECEDENTES GENERALES (KPIs + Sexo + Edad)
+sl=prs.slides.add_slide(blank)
+hdr(sl,TITULO); divv(sl,4.95)
+# KPIs
+for i,(val,lab) in enumerate([(str(N),'Personas\ningresaron'),
+                               (f'{pct_h}%','Son\nhombres'),
+                               (str(edad_media),'Edad\npromedio')]):
+    xk=0.18+i*1.55
+    add_rect(sl,xk,0.82,1.42,0.88,RGBColor(0xEE,0xF4,0xFB))
+    add_txt(sl,val,xk,0.86,1.42,0.48,size=20,bold=True,color=C_DARK,align=PP_ALIGN.CENTER)
+    add_txt(sl,lab,xk,1.34,1.42,0.34,size=9,color=C_GRAY,align=PP_ALIGN.CENTER)
+# Sexo
+add_txt(sl,'Distribución por Sexo',0.25,1.85,4.5,0.35,size=12,bold=True,color=C_GRAY)
+if data['sexo']:
+    fig_s=g_kpi_sexo(data['sexo'],N)
+    fig2img(sl,fig_s,0.25,2.2,4.5,3.15)
+# Edad
+add_txt(sl,'Distribución por Rango de Edad',5.15,0.85,4.6,0.35,size=12,bold=True,color=C_GRAY)
+if edad_media:
+    add_txt(sl,f'Promedio: {edad_media} años',5.15,1.22,4.6,0.28,size=10,color=C_GRAY,italic=True)
+if data['edad']:
+    labs_e=[e['label'] for e in data['edad']]; vals_e=[e['pct'] for e in data['edad']]
+    fig_e=g_bar_v(labs_e,vals_e,color='#1F3864',ylabel='%',max_val=100)
+    fig2img(sl,fig_e,5.1,1.52,4.65,3.85)
+ftr(sl,PIE_TXT)
 
-  // Izquierda: urgencias + accidentes (2 barras juntas)
-  sl.addText('Urgencias / Hospitalizaciones\ny Accidentes por consumo',
-    {x:0.25,y:0.82,w:4.5,h:0.65,
-     fontSize:12,bold:true,color:C_GRAY,fontFace:'Calibri',align:'left'});
-  const uaLabels = ['Urgencias /\nHospitalización','Accidentes\npor consumo'];
-  const uaVals   = [U.pct, A.pct];
-  sl.addChart(pres.charts.BAR, [{
-    name:'% personas',
-    labels: uaLabels,
-    values: uaVals,
-  }], {
-    x:0.3,y:1.52,w:4.4,h:3.85,barDir:'col',barGrouping:'clustered',
-    chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-    showValue:true,dataLabelFormatCode:'0.0"%"',dataLabelFontSize:14,dataLabelColor:'363636',
-    catAxisLabelColor:'363636',catAxisLabelFontSize:11,
-    valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-    valAxisMaxVal:Math.max(U.pct,A.pct,5)*1.45,
-    valAxisNumFmt:'0"%"',
-    valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-  });
+# SLIDE 3: SUSTANCIA PRINCIPAL
+sl=prs.slides.add_slide(blank)
+hdr(sl,TITULO)
+add_txt(sl,'CONSUMO SUSTANCIA PRINCIPAL AL INGRESO',1.5,0.82,7.0,0.38,
+        size=14,bold=True,color=C_MID,align=PP_ALIGN.CENTER)
+if data['sust']:
+    labs_s=[s['label'] for s in data['sust']]; vals_s=[s['pct'] for s in data['sust']]
+    fig_t=g_pie(labs_s,vals_s)
+    fig2img(sl,fig_t,1.5,1.2,7.0,4.0)
+add_txt(sl,f'Sustancia más frecuente: {sust_top1} ({sust_top1_pct}%)  ·  N = {N}',
+        1.0,5.3,8.0,0.25,size=9,color=C_GRAY,align=PP_ALIGN.CENTER,italic=True)
 
-  // Derecha: salud
-  sl.addText('AUTOPERCEPCIÓN DEL ESTADO DE SALUD\n(escala 0–10)',
-    {x:5.15,y:0.82,w:4.6,h:0.65,
-     fontSize:11,bold:true,color:C_TITLE,fontFace:'Calibri',align:'left'});
-  if (data.salud.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'Promedio',
-      labels: data.salud.map(d=>d.label),
-      values: data.salud.map(d=>d.prom),
-    }], {
-      x:5.15,y:1.52,w:4.6,h:3.85,barDir:'bar',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFontSize:11,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:10,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,valAxisMaxVal:10,
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
-  sl.addText(`N = ${data.meta.N}`,
-    {x:0.25,y:5.35,w:9.5,h:0.25,
-     fontSize:8.5,color:'AAAAAA',fontFace:'Calibri',align:'center',italic:true});
-}
+# SLIDE 4: DÍAS CONSUMO SUSTANCIA PRINCIPAL
+sl=prs.slides.add_slide(blank)
+hdr(sl,TITULO)
+add_txt(sl,'PROMEDIO DE DÍAS DE CONSUMO DE LA SUSTANCIA PRINCIPAL\nÚltimas 4 semanas · solo personas cuya sust. principal corresponde a cada categoría',
+        0.5,0.82,9.0,0.65,size=12,bold=True,color=C_MID,align=PP_ALIGN.CENTER)
+if data['dias_pp']:
+    labs_dp=[d['label'] for d in data['dias_pp']]; vals_dp=[d['prom'] for d in data['dias_pp']]
+    fig_dp=g_bar_v(labs_dp,vals_dp,color='#1F3864',ylabel='Días (0–28)',max_val=28)
+    fig2img(sl,fig_dp,0.8,1.55,8.4,3.85)
+ftr(sl,f'N = {N}  ·  Escala: días en últimas 4 semanas (0–28)')
 
-// ── SLIDE 7: TRANSGRESIÓN ─────────────────────────────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  hdr(sl, TITULO);
-  divV(sl, 4.95);
-  sl.addText('Personas que cometieron alguna\ntransgresión a la norma social',
-    {x:0.25,y:0.82,w:4.5,h:0.65,
-     fontSize:13,bold:true,color:C_GRAY,fontFace:'Calibri',align:'left'});
-  sl.addText('Distribución por tipo de transgresión',
-    {x:5.15,y:0.82,w:4.6,h:0.65,
-     fontSize:13,bold:true,color:C_GRAY,fontFace:'Calibri',align:'center'});
+# SLIDE 5: % CONSUMIDORES + DÍAS POR SUSTANCIA
+sl=prs.slides.add_slide(blank)
+hdr(sl,TITULO); divv(sl,4.95)
+add_txt(sl,'% DE PERSONAS QUE CONSUME\nCada sustancia al ingreso',0.25,0.82,4.5,0.65,size=11,bold=True,color=C_MID)
+if data['consumo']:
+    labs_c=[d['label'] for d in data['consumo']]; vals_c=[d['pct'] for d in data['consumo']]
+    fig_c=g_bar_v(labs_c,vals_c,color='#1F3864',ylabel='%',max_val=100)
+    fig2img(sl,fig_c,0.2,1.52,4.5,3.85)
+add_txt(sl,'PROMEDIO DE DÍAS DE CONSUMO\nPor sustancia (solo consumidores)',5.15,0.82,4.6,0.65,size=11,bold=True,color=C_MID)
+if data['dias']:
+    labs_d=[d['label'] for d in data['dias']]; vals_d=[d['prom'] for d in data['dias']]
+    fig_d=g_bar_v(labs_d,vals_d,color='#2E75B6',ylabel='Días (0–28)',max_val=28)
+    fig2img(sl,fig_d,5.15,1.52,4.6,3.85)
+ftr(sl,PIE_TXT)
 
-  const T = data.transTotal;
-  sl.addChart(pres.charts.BAR, [
-    {name:'Con transgresión', labels:['Con\ntransgresión','Sin\ntransgresión'],
-     values:[T.pct, null]},
-    {name:'Sin transgresión', labels:['Con\ntransgresión','Sin\ntransgresión'],
-     values:[null, parseFloat((100-T.pct).toFixed(1))]},
-  ], {
-    x:0.3,y:1.52,w:4.4,h:3.85,barDir:'col',barGrouping:'clustered',
-    chartColors:[C_DARK,'BDD7EE'],chartArea:{fill:{color:'FFFFFF'}},
-    showValue:true,dataLabelFormatCode:'0"%"',dataLabelFontSize:14,
-    dataLabelColor:C_WHITE,dataLabelPosition:'inEnd',
-    catAxisLabelColor:'363636',catAxisLabelFontSize:11,
-    valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-    valAxisMaxVal:100,valAxisNumFmt:'0"%"',
-    valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-  });
-  sl.addText(`${T.n} personas (${T.pct}%)`,
-    {x:0.3,y:1.22,w:4.4,h:0.28,
-     fontSize:12,bold:true,color:C_DARK,fontFace:'Calibri',align:'center'});
+# SLIDE 6: URGENCIAS + ACCIDENTES + SALUD
+sl=prs.slides.add_slide(blank)
+hdr(sl,TITULO)
+add_txt(sl,'SALUD Y FUNCIONAMIENTO',0.25,0.82,9.5,0.35,size=13,bold=True,color=C_MID)
 
-  const tiposFilt = data.transTipos.filter(d=>d.pct>0);
-  if (tiposFilt.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'% personas',
-      labels: tiposFilt.map(d=>d.label),
-      values: tiposFilt.map(d=>d.pct),
-    }], {
-      x:5.1,y:1.52,w:4.65,h:3.85,barDir:'col',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFormatCode:'0"%"',dataLabelFontSize:11,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:9,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-      valAxisNumFmt:'0"%"',
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
-  sl.addText(`N = ${data.meta.N}`,
-    {x:0.25,y:5.35,w:9.5,h:0.25,
-     fontSize:8.5,color:'AAAAAA',fontFace:'Calibri',align:'center',italic:true});
-}
+def kpi_box(sl,x,y,val,label,sublabel=''):
+    add_rect(sl,x,y,2.8,1.1,RGBColor(0xEE,0xF4,0xFB))
+    add_txt(sl,val,x,y+0.05,2.8,0.55,size=22,bold=True,color=C_DARK,align=PP_ALIGN.CENTER)
+    add_txt(sl,label,x,y+0.6,2.8,0.3,size=10,color=C_MID,align=PP_ALIGN.CENTER)
+    if sublabel: add_txt(sl,sublabel,x,y+0.88,2.8,0.2,size=8,color=C_GRAY,align=PP_ALIGN.CENTER,italic=True)
 
-// ── SLIDE 8: RELACIONES + SATISFACCIÓN ───────────────────────────────────
-{
-  const sl = pres.addSlide(); sl.background = {color:'FFFFFF'};
-  hdr(sl, TITULO);
-  divV(sl, 4.95);
+n_u=data['urgencias']['n']; p_u=data['urgencias']['pct']
+n_a=data['accidentes']['n']; p_a=data['accidentes']['pct']
+kpi_box(sl,0.25,1.3,f'{n_u} ({p_u}%)','Con urgencia/hospitalización','por consumo')
+kpi_box(sl,3.35,1.3,f'{n_a} ({p_a}%)','Con accidente','relacionado al consumo')
 
-  // Izquierda: relaciones (% positivas)
-  sl.addText('CALIDAD DE RELACIONES INTERPERSONALES\n% positivas (Excelente + Buena)',
-    {x:0.25,y:0.82,w:4.5,h:0.65,
-     fontSize:11,bold:true,color:C_TITLE,fontFace:'Calibri',align:'left'});
-  if (data.rel.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'% Positivas',
-      labels: data.rel.map(d=>d.label),
-      values: data.rel.map(d=>d.pos),
-    }], {
-      x:0.2,y:1.52,w:4.5,h:3.85,barDir:'col',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFormatCode:'0"%"',dataLabelFontSize:11,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:10,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,
-      valAxisMaxVal:100,valAxisNumFmt:'0"%"',
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
+if data['salud']:
+    labs_sal=[s['label'] for s in data['salud']]; vals_sal=[s['prom'] for s in data['salud']]
+    fig_sal,ax=plt.subplots(figsize=(3.5,2.5))
+    bars=ax.bar(labs_sal,vals_sal,color=['#2E75B6','#00B0F0'],width=0.5,zorder=3)
+    for b,v in zip(bars,vals_sal):
+        ax.text(b.get_x()+b.get_width()/2,b.get_height()+0.1,str(v),
+                ha='center',va='bottom',fontsize=12,fontweight='bold',color='#333')
+    ax.set_ylim(0,11); ax.axhline(5,color='#BFBFBF',linestyle='--',linewidth=0.8)
+    ax.set_ylabel('Promedio (0–10)',fontsize=8,color='#595959')
+    axstyle(ax); fig_sal.patch.set_facecolor('white'); fig_sal.tight_layout()
+    fig2img(sl,fig_sal,6.5,1.2,3.3,2.8)
+add_txt(sl,'Autopercepción de Salud (0–10)',6.5,0.85,3.3,0.35,size=11,bold=True,color=C_MID)
+ftr(sl,PIE_TXT)
 
-  // Derecha: satisfacción
-  sl.addText('SATISFACCIÓN DE VIDA\n(escala 0–10)',
-    {x:5.15,y:0.82,w:4.6,h:0.65,
-     fontSize:11,bold:true,color:C_TITLE,fontFace:'Calibri',align:'left'});
-  if (data.sat.length > 0) {
-    sl.addChart(pres.charts.BAR, [{
-      name:'Promedio',
-      labels: data.sat.map(d=>d.label),
-      values: data.sat.map(d=>d.prom),
-    }], {
-      x:5.15,y:1.52,w:4.6,h:3.85,barDir:'bar',barGrouping:'clustered',
-      chartColors:[C_IRT1],chartArea:{fill:{color:'FFFFFF'}},
-      showValue:true,dataLabelFontSize:11,dataLabelColor:'363636',
-      catAxisLabelColor:'363636',catAxisLabelFontSize:10,
-      valAxisLabelColor:'595959',valAxisLabelFontSize:9,valAxisMaxVal:10,
-      valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},showLegend:false,
-    });
-  }
-  sl.addText(`N = ${data.meta.N}  ·  ${data.meta.servicio}  ·  ${data.meta.periodo}`,
-    {x:0.25,y:5.35,w:9.5,h:0.25,
-     fontSize:8.5,color:'AAAAAA',fontFace:'Calibri',align:'center',italic:true});
-}
+# SLIDE 7: TRANSGRESIÓN
+sl=prs.slides.add_slide(blank)
+hdr(sl,TITULO); divv(sl,4.95)
+n_tr_val=data['transTotal']['n']; pct_tr_val=data['transTotal']['pct']
+add_txt(sl,'TRANSGRESIÓN A LA NORMA SOCIAL',0.25,0.82,4.5,0.35,size=12,bold=True,color=C_GRAY)
+# Torta trans
+fig_tr,ax=plt.subplots(figsize=(3.5,3.2))
+vals_tr=[n_tr_val,N-n_tr_val]; labs_tr=['Con transgresión','Sin transgresión']
+wedges,_,at=ax.pie(vals_tr,labels=None,colors=['#C00000','#BDD7EE'],
+    autopct=lambda p:f'{p:.1f}%',startangle=90,pctdistance=0.65,
+    wedgeprops={'edgecolor':'white','linewidth':1.5})
+for a in at: a.set_fontsize(10); a.set_color('white'); a.set_fontweight('bold')
+ax.legend(wedges,[f'{l} (n={v})' for l,v in zip(labs_tr,vals_tr)],
+          loc='lower center',bbox_to_anchor=(0.5,-0.12),fontsize=9,frameon=False)
+ax.set_aspect('equal'); fig_tr.patch.set_facecolor('white'); fig_tr.tight_layout()
+fig2img(sl,fig_tr,0.3,1.2,4.4,3.9)
 
-pres.writeFile({fileName: OUTPUT})
-  .then(() => { console.log('✅  PowerPoint guardado: ' + OUTPUT); })
-  .catch(e  => { console.error('Error JS:', e); process.exit(1); });
-"""
+add_txt(sl,'DISTRIBUCIÓN POR TIPO DE TRANSGRESIÓN',5.15,0.82,4.6,0.35,size=11,bold=True,color=C_GRAY)
+if data['transTipos']:
+    labs_tt=[t['label'] for t in data['transTipos']]; vals_tt=[t['pct'] for t in data['transTipos']]
+    fig_tt=g_bar_h(labs_tt,vals_tt,color='#C00000',xlabel='% del total')
+    fig2img(sl,fig_tt,5.1,1.2,4.65,4.0)
+ftr(sl,PIE_TXT)
 
-js_path = '/home/claude/_irt_car_builder.js'
-with open(js_path, 'w', encoding='utf-8') as f:
-    f.write(JS_CODE)
+# SLIDE 8: RELACIONES + SATISFACCIÓN
+sl=prs.slides.add_slide(blank)
+hdr(sl,TITULO); divv(sl,4.95)
 
-print('\n→ Construyendo PowerPoint con Node.js + pptxgenjs...')
-result = subprocess.run(['node', js_path], capture_output=True, text=True)
-if result.returncode != 0:
-    print('ERROR en Node.js:')
-    print(result.stderr)
-    sys.exit(1)
-print(result.stdout.strip())
+add_txt(sl,'RELACIONES INTERPERSONALES\n(% Excelente + Buena)',0.25,0.82,4.5,0.55,size=11,bold=True,color=C_MID)
+if data['rel']:
+    labs_r=[r['label'] for r in data['rel']]; vals_r=[r['pos'] for r in data['rel']]
+    fig_r=g_bar_h(labs_r,vals_r,color='#2E75B6',xlabel='% positivo')
+    fig2img(sl,fig_r,0.2,1.45,4.5,3.85)
 
-os.remove(json_path)
-os.remove(js_path)
+add_txt(sl,'SATISFACCIÓN DE VIDA\nPromedio por dimensión (0–10)',5.15,0.82,4.6,0.55,size=11,bold=True,color=C_MID)
+if data['sat']:
+    labs_sat=[s['label'] for s in data['sat']]; vals_sat=[s['prom'] for s in data['sat']]
+    fig_sat=g_bar_h(labs_sat,vals_sat,color='#00B0F0',xlabel='Promedio (0–10)')
+    fig2img(sl,fig_sat,5.15,1.45,4.6,3.85)
+ftr(sl,PIE_TXT)
 
-print('\n' + '='*60)
+prs.save(OUTPUT_FILE)
+print(f'\n{"="*60}')
 print(f'  ✅  LISTO  →  {OUTPUT_FILE}')
 print(f'      {N} pacientes IRT1  ·  {PERIODO}')
-print('='*60)
+print(f'{"="*60}')
