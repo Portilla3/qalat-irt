@@ -206,7 +206,7 @@ if uploaded:
         except Exception as e:
             st.error(f'❌ Error: {e}')
         finally:
-            os.unlink(tmp_raw)
+            st.session_state['raw_path'] = tmp_raw
 
 # ── Resultados ────────────────────────────────────────────────────────────────
 if 'result' in st.session_state:
@@ -408,7 +408,8 @@ if 'result' in st.session_state:
 
             try:
                 with st.spinner('Generando paquetes...'):
-                    zip_buf = run_paquetes_centros(wide_path_dist, keys_sel=keys_dist, progress_cb=_cb)
+                    zip_buf = run_paquetes_centros(wide_path_dist, keys_sel=keys_dist, progress_cb=_cb,
+                                                   raw_input_path=st.session_state.get('raw_path'))
                 today_str2 = datetime.now().strftime('%Y-%m-%d')
                 prog_dist.progress(1.0, text='✅ Listo')
                 status_box.success(f'✅ ZIP con {n_centros} carpetas generado')
