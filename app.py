@@ -248,7 +248,10 @@ if 'result' in st.session_state:
     if centros and not fc:
         st.markdown('<div class="sec">🏥 Resumen por Centro</div>', unsafe_allow_html=True)
         df_c = pd.DataFrame(centros)
-        df_c.columns = ['Centro','Aplicaciones','Pacientes únicos','Con IRT2','Sin IRT2','Valores corregidos']
+        # Renombrar columnas de forma segura
+        col_names = ['Centro','Aplicaciones','Pacientes únicos','Con IRT2','Sin IRT2','Valores corregidos']
+        if len(df_c.columns) == len(col_names):
+            df_c.columns = col_names
         rows_html = ''
         for i, row in df_c.iterrows():
             is_total = str(row.iloc[0]) == 'TOTAL'
