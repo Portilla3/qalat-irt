@@ -236,8 +236,8 @@ def sino1(col):
 R_sexo = {}
 if COL_SEXO:
     R_sexo = {k:int(v) for k,v in df1[COL_SEXO].value_counts(dropna=True).items()}
-n_hombre = R_sexo.get('Hombre', R_sexo.get('H', max(R_sexo.values()) if R_sexo else 0))
-n_mujer  = R_sexo.get('Mujer',  R_sexo.get('M', min(R_sexo.values()) if len(R_sexo)>1 else 0))
+n_hombre = R_sexo.get('Hombre', R_sexo.get('hombre', R_sexo.get('H', R_sexo.get('Masculino', R_sexo.get('masculino', R_sexo.get('M', max(R_sexo.values()) if R_sexo else 0))))))
+n_mujer  = R_sexo.get('Mujer',  R_sexo.get('mujer',  R_sexo.get('Femenino', R_sexo.get('femenino', R_sexo.get('F', min(R_sexo.values()) if len(R_sexo)>1 else 0)))))
 N_sx     = n_hombre + n_mujer
 pct_h    = round(n_hombre/N_sx*100,1) if N_sx else 0
 
