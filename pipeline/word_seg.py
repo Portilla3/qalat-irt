@@ -265,8 +265,10 @@ def cargar_datos():
     # Sexo
     if sexo:
         sc=seg[sexo].astype(str).str.strip().str.upper()
-        nv=int(sc.isin(['H','M']).sum())
-        R['n_hombre']=int((sc=='H').sum()); R['n_mujer']=int((sc=='M').sum()); R['nv_sex']=nv
+        nv=int(sc.isin(['H','M','HOMBRE','MUJER','MASCULINO','FEMENINO']).sum())
+        R['n_hombre']=int((sc.isin(['H','HOMBRE','MASCULINO'])).sum())
+        R['n_mujer']=int((sc.isin(['M','MUJER','FEMENINO'])).sum())
+        R['nv_sex']=nv
         R['pct_hombre']=round(R['n_hombre']/nv*100,1) if nv>0 else 0
         R['pct_mujer']=round(R['n_mujer']/nv*100,1) if nv>0 else 0
     else:

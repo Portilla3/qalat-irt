@@ -118,7 +118,9 @@ def col1(kws):
         if all(_norm(k) in _norm(c) for k in kws): return c
     return None
 
-COL_SEXO=next((c for c in cols if _norm(c) in ['sexo','género','genero']),None)
+COL_SEXO=next((c for c in cols if _norm(c) in ['sexo','género','genero'] or
+               (_norm(c).startswith('sexo') and '_irt1' in _norm(c)) or
+               (_norm(c).startswith('genero') and '_irt1' in _norm(c))),None)
 COL_FN=next((c for c in cols if 'fecha de nacimiento' in _norm(c)),None)
 COL_SP=col1(['sustancia','principal'])
 
@@ -206,9 +208,9 @@ def sino1(col):
 
 # Sexo
 R_sexo={k:int(v) for k,v in df1[COL_SEXO].value_counts(dropna=True).items()} if COL_SEXO else {}
-n_hombre=R_sexo.get('Hombre',R_sexo.get('hombre',R_sexo.get('H',R_sexo.get('Masculino',R_sexo.get('masculino',R_sexo.get('M',0))))))
-n_mujer=R_sexo.get('Mujer',R_sexo.get('mujer',R_sexo.get('Femenino',R_sexo.get('femenino',R_sexo.get('F',0)))))
-if n_hombre==0 and n_mujer==0 and R_sexo:
+n_hombre=R_sexo.get('Hombre',R_sexo.get('hombre',R_sexo.get('H',0)))
+n_mujer=R_sexo.get('Mujer',R_sexo.get('mujer',R_sexo.get('M',0)))
+if n_hombre==0 and R_sexo:
     vals_sx=sorted(R_sexo.values(),reverse=True)
     n_hombre=vals_sx[0] if vals_sx else 0
     n_mujer=vals_sx[1] if len(vals_sx)>1 else 0

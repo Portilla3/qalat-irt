@@ -156,7 +156,9 @@ def cols_irt1_multi(keyword):
 # Identificación
 COL_FN     = next((c for c in cols if 'fecha de nacimiento' in _norm(c)
                    or 'fecha_nac' in _norm(c)), None)
-COL_SEXO   = next((c for c in cols if _norm(c) in ['sexo','género','genero']), None)
+COL_SEXO   = next((c for c in cols if _norm(c) in ['sexo','género','genero'] or
+                   (_norm(c).startswith('sexo') and '_irt1' in _norm(c)) or
+                   (_norm(c).startswith('genero') and '_irt1' in _norm(c))), None)
 
 # Consumo — detectar sustancias disponibles
 SUST_NOMBRES = {
